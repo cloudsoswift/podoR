@@ -54,7 +54,7 @@ public class Performance {
     private String streamKey;
 
     @Column(name = "stream_status", length = 20)
-    @Comment("'SCHEDULED', 'LIVE', 'ENDED'")
+    @Comment("SCHEDULED, LIVE, ENDED")
     private String streamStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)

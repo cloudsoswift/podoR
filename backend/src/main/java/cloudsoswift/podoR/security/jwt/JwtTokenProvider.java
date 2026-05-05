@@ -22,7 +22,7 @@ public class JwtTokenProvider {
     private static final long REFRESH_TOKEN_EXPIRE_MS = 1000L * 60 * 60 * 24 * 14;
 
     public JwtTokenProvider(@Value("${jwt.secret}") String secretKey) {
-        byte[] keyBytes = Base64.getDecoder().decode(secretKey);
+        byte[] keyBytes = Base64.getDecoder().decode(secretKey); // Base64로 인코딩하여 사용
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 

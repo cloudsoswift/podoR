@@ -12,12 +12,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-        name = "user",
+        name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_user_email",
-                        columnNames = "email"
-                ),
                 @UniqueConstraint(
                         name = "uk_user_provider",
                         columnNames = {"provider", "provider_id"}
@@ -39,7 +35,7 @@ public class User {
     private String nickname;
 
     @Column(nullable = false, length = 20)
-    @Comment("'GOOGLE', 'KAKAO'")
+    @Comment("GOOGLE, KAKAO")
     private String provider;
 
     @Column(name = "provider_id", nullable = false, length = 255)
@@ -47,7 +43,7 @@ public class User {
     private String providerId;
 
     @Column(nullable = false, length = 50)
-    @Comment("'USER', 'ADMIN'")
+    @Comment("USER, ADMIN")
     private String role = "USER";
 
     @Column(length = 50)
