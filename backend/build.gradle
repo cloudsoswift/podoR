@@ -54,3 +54,18 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.register('copyPrivate') {
+	copy {
+		from './podoR-config/main'
+		include "*.yml"
+		into 'src/main/resources'
+	}
+	copy {
+		from './podoR-config/test'
+		include "*.yml"
+		into 'src/test/resources'
+	}
+}
+
+compileJava.dependsOn copyPrivate
