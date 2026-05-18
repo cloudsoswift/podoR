@@ -8,15 +8,13 @@ const OAuth2RedirectHandler = () => {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
+    const access_token = searchParams.get('accessToken');
 
-    if (accessToken && refreshToken) {
-      // 토큰을 로컬 스토리지에 저장 (보안을 위해 쿠키 사용을 권장할 수 있습니다)
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-
-      console.log('Tokens stored successfully. Redirecting...');
+    if (access_token) {
+      // 토큰을 로컬 스토리지에 저장
+      localStorage.setItem('access_token', access_token);
+      
+      window.history.replaceState({}, '', '/');
       
       // 메인 페이지나 대시보드로 리다이렉트
       router.push('/');
