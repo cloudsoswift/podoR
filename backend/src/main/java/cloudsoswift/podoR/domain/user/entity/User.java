@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Comment;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,9 +44,10 @@ public class User {
     @Comment("OAuth 제공자 고유의 ID")
     private String providerId;
 
-    @Column(nullable = false, length = 50)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     @Comment("USER, ADMIN")
-    private String role = "USER";
+    private Role role = Role.USER;
 
     @Column(length = 50)
     private String phone;
@@ -56,12 +59,24 @@ public class User {
     @Comment("Profile 이미지 URL")
     private String profileImage;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public void delete() {
+        this.deletedAt = LocalDateTime.now();
+    }
     // 생성시 생성 시간 및 갱신 시각을 반영
     @PrePersist
     protected void onCreate() {
@@ -77,22 +92,21 @@ public class User {
 
     @Builder
     public User(String email, String nickname, String provider,
-                String providerId, String role, String phone,
+                String providerId, Role role, String phone,
                 LocalDate birthday, String profileImage) {
         this.email = email;
         this.nickname = nickname;
         this.provider = provider;
         this.providerId = providerId;
-        this.role = role != null ? role : "USER";
+        this.role = role != null ? role : Role.USER;
         this.phone = phone;
         this.birthday = birthday;
         this.profileImage = profileImage;
     }
 
     // 갱신 가능한 요소들에 대해서 갱신 수행하는 메서드
-    public void updateProfile(String nickname, String phone, String profileImage) {
+    public void updateProfile(String nickname, String profileImage) {
         this.nickname = nickname;
-        this.phone = phone;
         this.profileImage = profileImage;
     }
 }
