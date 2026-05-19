@@ -1,10 +1,12 @@
 package cloudsoswift.podoR.security.oauth;
 
+import cloudsoswift.podoR.domain.user.entity.Role;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.user.repository.UserRepository;
 import cloudsoswift.podoR.security.oauth.provider.CustomOAuth2User;
 import cloudsoswift.podoR.security.oauth.provider.OAuth2UserInfo;
 import cloudsoswift.podoR.security.oauth.provider.OAuth2UserInfoFactory;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -12,7 +14,10 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class CustomOAuth2UserService
         extends DefaultOAuth2UserService {
@@ -37,16 +42,21 @@ public class CustomOAuth2UserService
             throw new OAuth2AuthenticationException(
                     "Email not found from OAuth2 provider");
         }
-
         // DB에서 사용자 조회 또는 생성
-        User user = userRepository
+        Optional<User> existingUser = userRepository
                 .findByProviderAndProviderId(
                         userInfo.getProvider(),
-                        userInfo.getProviderId())
-                .orElseGet(() -> registerNewUser(userInfo));
+                        userInfo.getProviderId());
+        User user = existingUser.orElseGet(() -> registerNewUser(userInfo));
 
+        if (user.isDeleted()) {
+            throw new OAuth2AuthenticationException("탈퇴한 유저입니다.");
+        }
         // 기존 사용자 정보 업데이트
-        updateExistingUser(user, userInfo);
+        if (existingUser.isPresent())
+        {
+            updateExistingUser(user, userInfo);
+        }
 
         return new CustomOAuth2User(user, oAuth2User.getAttributes());
     }
@@ -58,7 +68,7 @@ public class CustomOAuth2UserService
                 .provider(userInfo.getProvider())
                 .providerId(userInfo.getProviderId())
                 .profileImage(userInfo.getImageUrl())
-                .role("USER")
+                .role(Role.USER)
                 .build();
 
         return userRepository.save(user);
@@ -67,9 +77,7 @@ public class CustomOAuth2UserService
     private void updateExistingUser(User user, OAuth2UserInfo userInfo) {
         user.updateProfile(
                 userInfo.getName(),
-                null,  // phone
                 userInfo.getImageUrl()
         );
-        userRepository.save(user);
     }
 }

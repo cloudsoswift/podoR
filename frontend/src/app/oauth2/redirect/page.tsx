@@ -2,33 +2,38 @@
 
 import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuthStore } from '@/store/authStore';
+import apiClient from '@/lib/axios';
 
 const OAuth2RedirectHandler = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setAccessToken, setUser } = useAuthStore();
 
   useEffect(() => {
     const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
 
-    if (accessToken && refreshToken) {
-      // 토큰을 로컬 스토리지에 저장 (보안을 위해 쿠키 사용을 권장할 수 있습니다)
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-
-      console.log('Tokens stored successfully. Redirecting...');
-      
-      // 메인 페이지나 대시보드로 리다이렉트
-      router.push('/');
-    } else {
+    if (!accessToken) {
       console.error('Tokens are missing in the redirect URL');
-      // 에러 발생 시 로그인 페이지로 다시 이동
       router.push('/login');
+      return;
     }
-  }, [searchParams, router]);
+
+    setAccessToken(accessToken);
+
+    apiClient.get('/users/me')
+      .then((res) => {
+        setUser(res.data);
+        window.history.replaceState({}, '', '/');
+        router.push('/');
+      })
+      .catch(() => {
+        router.push('/login');
+      });
+  }, [searchParams, router, setAccessToken, setUser]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
         <p className="text-lg font-medium text-gray-700">로그인 처리 중입니다...</p>

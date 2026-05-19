@@ -8,6 +8,5 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
 
     // CustomOAuth2UserService에서 사용
-    // findByProviderAndProviderId(userInfo.getProvider(), userInfo.getProviderId())
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
 }
