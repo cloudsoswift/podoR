@@ -25,7 +25,13 @@
     "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
+    "msw": "^2.14.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
