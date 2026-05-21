@@ -1,16 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/store/authStore";
+import apiClient from "@/lib/axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const setAccessToken = useAuthStore((state) => state.setAccessToken);
+  const setUser = useAuthStore((state) => state.setUser);
+
   const handleGoogleLogin = () => {
     window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
   };
 
   const handleKakaoLogin = () => {
     window.location.href = `${API_BASE_URL}/oauth2/authorization/kakao`;
+  };
+
+  // OAuth 리다이렉트 없이 로그인 상태를 흉내내는 dev 전용 로그인.
+  // 토큰을 직접 store에 넣고 /users/me(MSW mock)를 호출한다.
+  const handleMockLogin = async () => {
+    setAccessToken("mock-access-token");
+    try {
+      const res = await apiClient.get("/users/me");
+      setUser(res.data);
+      router.push("/");
+    } catch (e) {
+      console.error("mock 로그인 실패 (MSW 동작 여부 확인)", e);
+    }
   };
 
   return (
@@ -50,6 +70,15 @@ export default function LoginPage() {
           </svg>
           카카오로 계속하기
         </button>
+
+        {process.env.NODE_ENV === "development" && (
+          <button
+            onClick={handleMockLogin}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-dashed border-gray-300 rounded-xl text-gray-500 text-sm font-semibold hover:bg-gray-50 transition-all active:scale-[0.98] cursor-pointer"
+          >
+            테스트 로그인 (dev)
+          </button>
+        )}
       </div>
 
       <p className="mt-6 text-xs text-gray-400">
