@@ -1,8 +1,37 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "@/store/authStore";
+import apiClient from "@/lib/axios";
+
+const buttonClass =
+  "text-sm font-medium px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer";
 
 export default function Header() {
+  const router = useRouter();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const user = useAuthStore((state) => state.user);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+  // persist 상태는 클라이언트에서 마운트 후 복원되므로, SSR 결과와
+  // 일치시키기 위해 마운트 전에는 로그아웃 상태로 렌더링
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isLoggedIn = mounted && !!accessToken;
+
+  const handleLogout = async () => {
+    try {
+      // 서버에서 refresh_token 쿠키 만료 처리
+      await apiClient.post("/oauth2/logout");
+    } catch {
+      // 서버 호출이 실패해도 클라이언트 인증 상태는 정리한다
+    } finally {
+      clearAuth();
+      router.push("/");
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -22,9 +51,20 @@ export default function Header() {
             </svg>
             <input className="bg-transparent text-sm outline-none w-40" placeholder="공연명, 아티스트 검색" />
           </div>
-          <Link href="/login" className="text-sm font-medium px-4 py-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
-            로그인
-          </Link>
+          {isLoggedIn && user && (
+            <span className="text-sm font-medium text-gray-700">
+              {user.nickname}님 환영합니다!
+            </span>
+          )}
+          {isLoggedIn ? (
+            <button onClick={handleLogout} className={buttonClass}>
+              로그아웃
+            </button>
+          ) : (
+            <Link href="/login" className={buttonClass}>
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </header>

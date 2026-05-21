@@ -6,6 +6,13 @@ const apiClient = axios.create({
   withCredentials: true, // refresh_token HttpOnly 쿠키 전송을 위해 필요
 });
 
+// refresh 전용 클라이언트: 인터셉터가 없어 refresh 응답이 인터셉터에
+// 재진입하지 않는다. (RT까지 만료된 경우의 데드락 방지)
+const refreshClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080",
+  withCredentials: true,
+});
+
 apiClient.interceptors.request.use((config) => {
   // 매 요청시, store에 access token 있으면 가져와서
   // 헤더에 추가
@@ -64,7 +71,7 @@ apiClient.interceptors.response.use(
 
     try {
       // refresh 요청 후 받아온 토큰 store에 세팅
-      const { data } = await apiClient.post<{ accessToken: string }>("/oauth2/token/refresh");
+      const { data } = await refreshClient.post<{ accessToken: string }>("/oauth2/token/refresh");
       const { accessToken } = data;
       useAuthStore.getState().setAccessToken(accessToken);
       // 큐에 대기중인 요청들에게 새 토큰 resolve
