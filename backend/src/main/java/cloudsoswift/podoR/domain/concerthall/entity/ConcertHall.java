@@ -47,6 +47,13 @@ public class ConcertHall {
         updatedAt = LocalDateTime.now();
     }
 
+    public void update(String name, String address, String description, String concertHallImage) {
+        this.name = name;
+        this.address = address;
+        this.description = description;
+        this.concertHallImage = concertHallImage;
+    }
+
     @Builder
     public ConcertHall(String name, String address, String description,
                        String concertHallImage) {
