@@ -23,6 +23,10 @@ public class ConcertHallLayout {
     @Column(columnDefinition = "TEXT")
     private String layoutJson;
 
+    public void update(String layoutJson) {
+        this.layoutJson = layoutJson;
+    }
+
     @Builder
     public ConcertHallLayout(ConcertHall concertHall, String layoutJson) {
         this.concertHall = concertHall;
