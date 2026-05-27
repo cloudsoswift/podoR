@@ -11,26 +11,57 @@ const mockUser = {
   profileImage: null,
 };
 
-const mockConcerts = [
+const mockConcertHalls = [
   {
-    id: 1,
-    title: "아이유 콘서트 2026",
-    hostNickname: "아이유",
-    venue: "올림픽공원 KSPO돔",
-    startAt: "2026-08-01T19:00:00",
-    posterImage: null,
-    genre: "POP",
-    minPrice: 99000,
+    seq: 1,
+    name: "올림픽공원 KSPO돔",
+    address: "서울특별시 송파구 올림픽로 424",
+    description: "국내 최대 규모의 실내 공연장으로, 약 15,000석 규모를 보유하고 있습니다.",
+    concertHallImage: null,
+    createdAt: "2024-01-01T00:00:00",
+    updatedAt: "2024-01-01T00:00:00",
   },
   {
-    id: 2,
+    seq: 2,
+    name: "잠실종합운동장",
+    address: "서울특별시 송파구 올림픽로 25",
+    description: "서울을 대표하는 대형 야외 공연장입니다.",
+    concertHallImage: null,
+    createdAt: "2024-01-01T00:00:00",
+    updatedAt: "2024-01-01T00:00:00",
+  },
+];
+
+const mockPerformances = [
+  {
+    seq: 1,
+    hallSeq: 1,
+    performanceId: "perf-uuid-0001",
+    title: "아이유 콘서트 2026",
+    performerNickname: "아이유",
+    performDate: "2026-08-01T19:00:00",
+    performanceType: "POP",
+    streamStatus: "SCHEDULED",
+  },
+  {
+    seq: 2,
+    hallSeq: 2,
+    performanceId: "perf-uuid-0002",
     title: "BTS World Tour",
-    hostNickname: "BIGHIT",
-    venue: "잠실종합운동장",
-    startAt: "2026-09-15T18:00:00",
-    posterImage: null,
-    genre: "POP",
-    minPrice: 132000,
+    performerNickname: "BIGHIT",
+    performDate: "2026-09-15T18:00:00",
+    performanceType: "POP",
+    streamStatus: "SCHEDULED",
+  },
+  {
+    seq: 3,
+    hallSeq: 1,
+    performanceId: "perf-uuid-0003",
+    title: "아이유 콘서트 2025",
+    performerNickname: "아이유",
+    performDate: "2025-12-24T19:00:00",
+    performanceType: "POP",
+    streamStatus: "ENDED",
   },
 ];
 
@@ -59,13 +90,13 @@ export const handlers = [
   }),
 
   // 공연 목록
-  http.get(`${BASE_URL}/concerts`, () => {
-    return HttpResponse.json(mockConcerts);
+  http.get(`${BASE_URL}/performances`, () => {
+    return HttpResponse.json(mockPerformances);
   }),
 
   // 공연 상세
-  http.get(`${BASE_URL}/concerts/:concertId`, ({ params }) => {
-    const concert = mockConcerts.find((c) => c.id === Number(params.concertId));
+  http.get(`${BASE_URL}/performances/:concertId`, ({ params }) => {
+    const concert = mockPerformances.find((c) => c.seq === Number(params.concertId));
     if (!concert) return new HttpResponse(null, { status: 404 });
     return HttpResponse.json(concert);
   }),
@@ -101,7 +132,7 @@ export const handlers = [
 
   // 호스트 - 내 공연 목록
   http.get(`${BASE_URL}/host/concerts`, () => {
-    return HttpResponse.json(mockConcerts);
+    return HttpResponse.json(mockPerformances);
   }),
 
   // 호스트 - 공연 등록
@@ -122,5 +153,20 @@ export const handlers = [
   // 호스트 - 좌석 판매 현황
   http.get(`${BASE_URL}/host/concerts/:concertId/sales`, () => {
     return HttpResponse.json({ totalSeats: 5, soldSeats: 1, revenue: 132000 });
+  }),
+
+  // 공연장 상세
+  http.get(`${BASE_URL}/concert-halls/:hallId`, ({ params }) => {
+    const hall = mockConcertHalls.find((h) => h.seq === Number(params.hallId));
+    if (!hall) return new HttpResponse(null, { status: 404 });
+    return HttpResponse.json(hall);
+  }),
+
+  // 공연장의 공연 목록 - performances 엔드포인트 (최신순)
+  http.get(`${BASE_URL}/concert-halls/:hallId/performances`, ({ params }) => {
+    const performances = mockPerformances
+      .filter((p) => p.hallSeq === Number(params.hallId))
+      .sort((a, b) => new Date(b.performDate).getTime() - new Date(a.performDate).getTime());
+    return HttpResponse.json(performances);
   }),
 ];
