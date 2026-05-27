@@ -82,6 +82,16 @@ public class Event {
         this.venue = venue;
     }
 
+    public void update(String title, String content, String eventType,
+                       LocalDateTime eventDate, LocalDateTime ticketingDate, Venue venue) {
+        this.title = title;
+        this.content = content;
+        this.eventType = eventType;
+        this.eventDate = eventDate;
+        this.ticketingDate = ticketingDate;
+        this.venue = venue;
+    }
+
     public void updateStreamStatus(String status) {
         this.streamStatus = status;
     }
