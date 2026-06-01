@@ -25,8 +25,8 @@ public class Follow {
 
     @Id
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "performer_seq")
-    private User performer;
+    @JoinColumn(name = "host_seq")
+    private User host;
 
     @Column(name = "followed_at", nullable = false, updatable = false)
     private LocalDateTime followedAt;
@@ -37,9 +37,9 @@ public class Follow {
     }
 
     @Builder
-    public Follow(User follower, User performer) {
+    public Follow(User follower, User host) {
         this.follower = follower;
-        this.performer = performer;
+        this.host = host;
     }
 
     // 복합 키 클래스
@@ -48,13 +48,13 @@ public class Follow {
     // 이를 @IdClass()의 인자로 넘겨 'PK 정보를 담은 클래스 임'을 나타냄
     public static class FollowId implements Serializable {
         private Long follower;
-        private Long performer;
+        private Long host;
 
         public FollowId() {}
 
-        public FollowId(Long follower, Long performer) {
+        public FollowId(Long follower, Long host) {
             this.follower = follower;
-            this.performer = performer;
+            this.host = host;
         }
 
         @Override
@@ -63,12 +63,12 @@ public class Follow {
             if (o == null || getClass() != o.getClass()) return false;
             FollowId followId = (FollowId) o;
             return Objects.equals(follower, followId.follower) &&
-                    Objects.equals(performer, followId.performer);
+                    Objects.equals(host, followId.host);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(follower, performer);
+            return Objects.hash(follower, host);
         }
     }
 }

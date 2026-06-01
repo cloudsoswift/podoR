@@ -1,6 +1,6 @@
 package cloudsoswift.podoR.domain.ticketing.entity;
 
-import cloudsoswift.podoR.domain.performance.entity.Performance;
+import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -24,8 +24,8 @@ public class TicketingOrder {
     private Long seq;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "performance_seq", nullable = false)
-    private Performance performance;
+    @JoinColumn(name = "event_seq", nullable = false)
+    private Event event;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_seq", nullable = false)
@@ -56,9 +56,9 @@ public class TicketingOrder {
     }
 
     @Builder
-    public TicketingOrder(Performance performance, User user, String orderNumber,
+    public TicketingOrder(Event event, User user, String orderNumber,
                           Integer totalPrice, String status) {
-        this.performance = performance;
+        this.event = event;
         this.user = user;
         this.orderNumber = orderNumber;
         this.totalPrice = totalPrice;

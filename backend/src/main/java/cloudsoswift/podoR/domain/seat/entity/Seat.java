@@ -1,6 +1,6 @@
 package cloudsoswift.podoR.domain.seat.entity;
 
-import cloudsoswift.podoR.domain.concerthall.entity.ConcertHall;
+import cloudsoswift.podoR.domain.venue.entity.Venue;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -26,8 +26,8 @@ public class Seat {
     private Long seq;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "hall_seq", nullable = false)
-    private ConcertHall concertHall;
+    @JoinColumn(name = "venue_seq", nullable = false)
+    private Venue venue;
 
     @Column(nullable = false, length = 20)
     private String section;
@@ -42,9 +42,9 @@ public class Seat {
     private Boolean isAvailable = true;
 
     @Builder
-    public Seat(ConcertHall concertHall, String section, String rowNumber,
+    public Seat(Venue venue, String section, String rowNumber,
                 Integer seatNumber, Boolean isAvailable) {
-        this.concertHall = concertHall;
+        this.venue = venue;
         this.section = section;
         this.rowNumber = rowNumber;
         this.seatNumber = seatNumber;

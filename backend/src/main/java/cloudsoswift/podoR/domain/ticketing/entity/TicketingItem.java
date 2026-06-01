@@ -1,6 +1,6 @@
 package cloudsoswift.podoR.domain.ticketing.entity;
 
-import cloudsoswift.podoR.domain.performance.entity.PerformanceSeat;
+import cloudsoswift.podoR.domain.event.entity.EventSeat;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,13 +22,13 @@ public class TicketingItem {
     private TicketingOrder ticketingOrder;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "performance_seat_seq", nullable = false)
-    private PerformanceSeat performanceSeat;
+    @JoinColumn(name = "event_seat_seq", nullable = false)
+    private EventSeat eventSeat;
 
     @Builder
-    public TicketingItem(TicketingOrder ticketingOrder, PerformanceSeat performanceSeat) {
+    public TicketingItem(TicketingOrder ticketingOrder, EventSeat eventSeat) {
         this.ticketingOrder = ticketingOrder;
-        this.performanceSeat = performanceSeat;
+        this.eventSeat = eventSeat;
     }
 
     // 양방향 관계 설정용
