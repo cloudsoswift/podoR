@@ -1,44 +1,59 @@
 import { EditorAction, EditorState } from "./editorReducer";
-import { Section } from "./types";
+import { Section, Tool } from "./types";
 
 interface Props {
   state: EditorState;
   dispatch: React.Dispatch<EditorAction>;
 }
 
+const TOOLS: { tool: Tool; label: string; hint: string }[] = [
+  {
+    tool: "pan",
+    label: "손",
+    hint: "드래그해서 화면을 이동합니다. (휠로 확대/축소)",
+  },
+  {
+    tool: "select",
+    label: "선택",
+    hint: "섹션을 클릭해 선택하고, 바디를 드래그하면 섹션 전체가 이동합니다.",
+  },
+  {
+    tool: "pen",
+    label: "펜",
+    hint: "빈 곳을 클릭해 점을 찍고 첫 점을 다시 클릭하면 닫힙니다(최소 3점). 섹션을 클릭하면 앵커를 편집합니다.",
+  },
+];
+
 export default function EditorToolbar({ state, dispatch }: Props) {
   const selected: Section | undefined = state.sections.find(
     (s) => s.id === state.selectedId,
   );
-
-  const modeBtn = (mode: "draw" | "select", label: string) => (
-    <button
-      type="button"
-      onClick={() => dispatch({ type: "SET_MODE", mode })}
-      className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
-        state.mode === mode
-          ? "bg-indigo-600 text-white"
-          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-      }`}
-    >
-      {label}
-    </button>
-  );
+  const activeHint = TOOLS.find((t) => t.tool === state.tool)?.hint;
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3 bg-white">
-      <div className="flex items-center gap-1.5">
-        {modeBtn("draw", "그리기")}
-        {modeBtn("select", "편집")}
+      {/* 도구 선택 */}
+      <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-0.5">
+        {TOOLS.map(({ tool, label }) => (
+          <button
+            key={tool}
+            type="button"
+            onClick={() => dispatch({ type: "SET_TOOL", tool })}
+            className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              state.tool === tool
+                ? "bg-white text-indigo-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="h-5 w-px bg-gray-200" />
 
-      {state.mode === "draw" ? (
-        <span className="text-xs text-gray-500">
-          캔버스를 클릭해 점을 찍고, 첫 점을 다시 클릭하면 도형이 됩니다 (최소 3점).
-        </span>
-      ) : selected ? (
+      {/* 선택된 섹션 컨텍스트 컨트롤 (선택/펜 도구에서 노출) */}
+      {state.tool !== "pan" && selected ? (
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={selected.name}
@@ -71,14 +86,14 @@ export default function EditorToolbar({ state, dispatch }: Props) {
           >
             섹션 삭제
           </button>
-          <span className="text-xs text-gray-400">
-            앵커 드래그=이동 · Alt+드래그=곡선화 · 핸들 더블클릭=직선화
-          </span>
+          {state.tool === "pen" && (
+            <span className="text-xs text-gray-400">
+              앵커 드래그=이동 · 앵커 더블클릭=곡선↔직선 · 핸들 더블클릭=직선화
+            </span>
+          )}
         </div>
       ) : (
-        <span className="text-xs text-gray-500">
-          섹션을 클릭해 선택하면 앵커와 곡선을 편집할 수 있습니다.
-        </span>
+        <span className="text-xs text-gray-500">{activeHint}</span>
       )}
 
       <div className="ml-auto">

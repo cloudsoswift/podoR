@@ -20,6 +20,7 @@ export interface Section {
   anchors: Anchor[];
 }
 
-export type Mode = "draw" | "select";
+// 캔버스 상호작용 도구. pan=화면 이동, select=섹션 선택/이동, pen=점 찍기/편집.
+export type Tool = "pan" | "select" | "pen";
 
 export type HandleSide = "in" | "out";

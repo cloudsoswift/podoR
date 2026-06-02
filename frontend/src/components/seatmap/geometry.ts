@@ -16,11 +16,24 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** anchor 기준으로 handle 의 반대편 대칭점을 구한다(부드러운 곡선용). */
-export function mirror(anchor: Point, handle: Point): Point {
+/**
+ * 코너 앵커를 부드러운 곡선 앵커로 바꿀 때 쓸 양쪽 핸들을 추정한다.
+ * 이웃 앵커(prev/next)를 잇는 방향을 접선으로 삼고, 각 변 길이의 1/3 만큼 뻗는다.
+ */
+export function autoHandles(
+  prev: Point,
+  anchor: Point,
+  next: Point,
+): { handleIn: Point; handleOut: Point } {
+  const dir = { x: next.x - prev.x, y: next.y - prev.y };
+  const len = Math.hypot(dir.x, dir.y) || 1;
+  const ux = dir.x / len;
+  const uy = dir.y / len;
+  const inLen = dist(anchor, prev) / 3;
+  const outLen = dist(anchor, next) / 3;
   return {
-    x: 2 * anchor.x - handle.x,
-    y: 2 * anchor.y - handle.y,
+    handleIn: { x: anchor.x - ux * inLen, y: anchor.y - uy * inLen },
+    handleOut: { x: anchor.x + ux * outLen, y: anchor.y + uy * outLen },
   };
 }
 
