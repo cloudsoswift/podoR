@@ -1,5 +1,12 @@
-import { autoHandles, genId, pointsToAnchors } from "./geometry";
-import { Anchor, HandleSide, Point, Section, Tool } from "./types";
+import { autoHandles, fitContain, genId, pointsToAnchors } from "./geometry";
+import {
+  Anchor,
+  BackgroundImage,
+  HandleSide,
+  Point,
+  Section,
+  Tool,
+} from "./types";
 
 export const VIEW_W = 1000;
 export const VIEW_H = 700;
@@ -23,6 +30,7 @@ export interface EditorState {
   selectedId: string | null;
   draft: Point[];
   cursor: Point | null;
+  background: BackgroundImage | null;
 }
 
 export const initialState: EditorState = {
@@ -31,7 +39,10 @@ export const initialState: EditorState = {
   selectedId: null,
   draft: [],
   cursor: null,
+  background: null,
 };
+
+const MIN_BG_SIZE = 20; // 배경 리사이즈 최소 변 길이(콘텐츠 단위)
 
 export type EditorAction =
   | { type: "SET_TOOL"; tool: Tool }
@@ -56,6 +67,24 @@ export type EditorAction =
   | { type: "RENAME_SECTION"; id: string; name: string }
   | { type: "SET_COLOR"; id: string; color: string }
   | { type: "LOAD_SECTIONS"; sections: Section[] }
+  | {
+      type: "SET_BACKGROUND";
+      src: string;
+      naturalWidth: number;
+      naturalHeight: number;
+    }
+  | { type: "MOVE_BACKGROUND"; dx: number; dy: number }
+  | {
+      type: "RESIZE_BACKGROUND";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  | { type: "SET_BACKGROUND_OPACITY"; opacity: number }
+  | { type: "SET_BACKGROUND_LOCKED"; locked: boolean }
+  | { type: "FIT_BACKGROUND" }
+  | { type: "REMOVE_BACKGROUND" }
   | { type: "RESET" };
 
 function mapSection(
@@ -239,6 +268,83 @@ export function editorReducer(
         cursor: null,
         tool: "select",
       };
+
+    case "SET_BACKGROUND": {
+      // 업로드 직후: 공연장 해상도에 contain 으로 맞추고, 위치 조정을 위해 잠금 해제 상태로 둔다.
+      const fit = fitContain(
+        action.naturalWidth,
+        action.naturalHeight,
+        VIEW_W,
+        VIEW_H,
+      );
+      return {
+        ...state,
+        background: {
+          src: action.src,
+          naturalWidth: action.naturalWidth,
+          naturalHeight: action.naturalHeight,
+          opacity: 0.5,
+          locked: false,
+          ...fit,
+        },
+      };
+    }
+
+    case "MOVE_BACKGROUND": {
+      if (!state.background) return state;
+      return {
+        ...state,
+        background: {
+          ...state.background,
+          x: state.background.x + action.dx,
+          y: state.background.y + action.dy,
+        },
+      };
+    }
+
+    case "RESIZE_BACKGROUND": {
+      if (!state.background) return state;
+      return {
+        ...state,
+        background: {
+          ...state.background,
+          x: action.x,
+          y: action.y,
+          width: Math.max(MIN_BG_SIZE, action.width),
+          height: Math.max(MIN_BG_SIZE, action.height),
+        },
+      };
+    }
+
+    case "SET_BACKGROUND_OPACITY": {
+      if (!state.background) return state;
+      return {
+        ...state,
+        background: { ...state.background, opacity: action.opacity },
+      };
+    }
+
+    case "SET_BACKGROUND_LOCKED": {
+      if (!state.background) return state;
+      return {
+        ...state,
+        background: { ...state.background, locked: action.locked },
+      };
+    }
+
+    case "FIT_BACKGROUND": {
+      if (!state.background) return state;
+      const fit = fitContain(
+        state.background.naturalWidth,
+        state.background.naturalHeight,
+        VIEW_W,
+        VIEW_H,
+      );
+      return { ...state, background: { ...state.background, ...fit } };
+    }
+
+    case "REMOVE_BACKGROUND":
+      return { ...state, background: null };
 
     case "RESET":
       return { ...initialState };

@@ -17,6 +17,37 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * Shift 각도 고정: prev 를 원점으로 cur 을 가장 가까운 직각 축(수평/수직)에 투영한다.
+ * |dx| >= |dy| 면 수평(0°/180°), 아니면 수직(90°/270°)으로 스냅한다.
+ * 축 방향 거리는 보존되므로 멀어지거나 가까워지는 것만 가능하다.
+ */
+export function snapToRightAngle(prev: Point, cur: Point): Point {
+  const dx = cur.x - prev.x;
+  const dy = cur.y - prev.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return { x: cur.x, y: prev.y };
+  }
+  return { x: prev.x, y: cur.y };
+}
+
+/**
+ * 자연 크기(nw×nh)를 박스(bw×bh) 안에 비율 유지로 맞추고(contain) 중앙 정렬한 사각형.
+ * 배경 이미지를 공연장 해상도에 자동으로 맞출 때 사용한다.
+ */
+export function fitContain(
+  nw: number,
+  nh: number,
+  bw: number,
+  bh: number,
+): { x: number; y: number; width: number; height: number } {
+  if (nw <= 0 || nh <= 0) return { x: 0, y: 0, width: bw, height: bh };
+  const scale = Math.min(bw / nw, bh / nh);
+  const width = nw * scale;
+  const height = nh * scale;
+  return { x: (bw - width) / 2, y: (bh - height) / 2, width, height };
+}
+
+/**
  * 코너 앵커를 부드러운 곡선 앵커로 바꿀 때 쓸 양쪽 핸들을 추정한다.
  * 이웃 앵커(prev/next)를 잇는 방향을 접선으로 삼고, 각 변 길이의 1/3 만큼 뻗는다.
  */

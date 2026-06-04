@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { clamp, dist } from "./geometry";
+import { clamp, dist, snapToRightAngle } from "./geometry";
 import {
   CLOSE_RADIUS,
   EditorAction,
@@ -8,7 +8,8 @@ import {
   VIEW_H,
   VIEW_W,
 } from "./editorReducer";
-import { HandleSide, Point } from "./types";
+import { BgCorner, HandleSide, Point } from "./types";
+import BackgroundLayer from "./BackgroundLayer";
 import DraftLayer from "./DraftLayer";
 import SectionShape from "./SectionShape";
 
@@ -33,7 +34,9 @@ type DragTarget =
   | { kind: "anchor"; sectionId: string; anchorId: string }
   | { kind: "handle"; sectionId: string; anchorId: string; side: HandleSide }
   | { kind: "section"; sectionId: string; last: Point }
-  | { kind: "pan"; startRoot: Point; startTx: number; startTy: number };
+  | { kind: "pan"; startRoot: Point; startTx: number; startTy: number }
+  | { kind: "bg-move"; last: Point }
+  | { kind: "bg-resize"; corner: BgCorner; fixed: Point };
 
 export default function EditorCanvas({ state, dispatch }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -75,14 +78,26 @@ export default function EditorCanvas({ state, dispatch }: Props) {
     return { x: p.x, y: p.y };
   }
 
-  /** 화면 좌표 -> 콘텐츠 좌표(카메라 역변환) 후 종이 영역으로 clamp. */
-  function toSvg(e: React.PointerEvent | React.MouseEvent): Point {
+  /** 화면 좌표 -> 콘텐츠 좌표(카메라 역변환). clamp 하지 않는다. */
+  function toContent(e: React.PointerEvent | React.MouseEvent): Point {
     const r = toRoot(e.clientX, e.clientY);
     const v = viewRef.current;
-    return {
-      x: clamp((r.x - v.tx) / v.z, 0, VIEW_W),
-      y: clamp((r.y - v.ty) / v.z, 0, VIEW_H),
-    };
+    return { x: (r.x - v.tx) / v.z, y: (r.y - v.ty) / v.z };
+  }
+
+  /** 화면 좌표 -> 콘텐츠 좌표 후 종이 영역으로 clamp. */
+  function toSvg(e: React.PointerEvent | React.MouseEvent): Point {
+    const c = toContent(e);
+    return { x: clamp(c.x, 0, VIEW_W), y: clamp(c.y, 0, VIEW_H) };
+  }
+
+  /** 펜 입력 좌표. Shift 를 누르면 직전 점 기준 직각으로 각도 고정. */
+  function penPoint(e: React.PointerEvent | React.MouseEvent): Point {
+    const p = toSvg(e);
+    if (e.shiftKey && state.draft.length > 0) {
+      return snapToRightAngle(state.draft[state.draft.length - 1], p);
+    }
+    return p;
   }
 
   /** 주어진 루트 좌표를 고정점으로 factor 배 줌. */
@@ -206,6 +221,31 @@ export default function EditorCanvas({ state, dispatch }: Props) {
     dragRef.current = { kind: "handle", sectionId, anchorId, side };
   }
 
+  function beginBgMove(e: React.PointerEvent) {
+    if (shouldPan(e)) return startPan(e);
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    suppressClickRef.current = true;
+    svgRef.current?.setPointerCapture(e.pointerId);
+    dragRef.current = { kind: "bg-move", last: toContent(e) };
+  }
+
+  function beginBgResize(e: React.PointerEvent, corner: BgCorner) {
+    if (shouldPan(e)) return startPan(e);
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    suppressClickRef.current = true;
+    const bg = state.background;
+    if (!bg) return;
+    // 잡은 코너의 대각(반대) 코너를 고정점으로 삼는다.
+    const fixed = {
+      x: corner === "nw" || corner === "sw" ? bg.x + bg.width : bg.x,
+      y: corner === "nw" || corner === "ne" ? bg.y + bg.height : bg.y,
+    };
+    svgRef.current?.setPointerCapture(e.pointerId);
+    dragRef.current = { kind: "bg-resize", corner, fixed };
+  }
+
   function handlePointerMove(e: React.PointerEvent) {
     const drag = dragRef.current;
     if (drag) {
@@ -228,6 +268,33 @@ export default function EditorCanvas({ state, dispatch }: Props) {
         }
         return;
       }
+      if (drag.kind === "bg-move") {
+        const cur = toContent(e);
+        const dx = cur.x - drag.last.x;
+        const dy = cur.y - drag.last.y;
+        if (dx || dy) {
+          dispatch({ type: "MOVE_BACKGROUND", dx, dy });
+          drag.last = cur;
+        }
+        return;
+      }
+      if (drag.kind === "bg-resize") {
+        const p = toContent(e);
+        const fixed = drag.fixed;
+        let w = Math.abs(p.x - fixed.x);
+        let h = Math.abs(p.y - fixed.y);
+        // Shift: 원본 비율 유지(더 큰 변에 맞춰 보정).
+        const bg = state.background;
+        if (e.shiftKey && bg && bg.naturalWidth > 0 && bg.naturalHeight > 0) {
+          const ar = bg.naturalWidth / bg.naturalHeight;
+          if (w / h > ar) h = w / ar;
+          else w = h * ar;
+        }
+        const x = p.x < fixed.x ? fixed.x - w : fixed.x;
+        const y = p.y < fixed.y ? fixed.y - h : fixed.y;
+        dispatch({ type: "RESIZE_BACKGROUND", x, y, width: w, height: h });
+        return;
+      }
       const p = toSvg(e);
       if (drag.kind === "handle") {
         dispatch({
@@ -248,7 +315,7 @@ export default function EditorCanvas({ state, dispatch }: Props) {
       return;
     }
     if (state.tool === "pen") {
-      dispatch({ type: "SET_CURSOR", point: toSvg(e) });
+      dispatch({ type: "SET_CURSOR", point: penPoint(e) });
     }
   }
 
@@ -268,7 +335,7 @@ export default function EditorCanvas({ state, dispatch }: Props) {
     }
     // 펜 도구의 점 찍기/닫기만 click 으로 처리.
     if (state.tool !== "pen") return;
-    const p = toSvg(e);
+    const p = penPoint(e);
     const closeR = CLOSE_RADIUS / viewRef.current.z;
     if (state.draft.length >= MIN_ANCHORS && dist(p, state.draft[0]) <= closeR) {
       dispatch({ type: "CLOSE_DRAFT" });
@@ -349,6 +416,16 @@ export default function EditorCanvas({ state, dispatch }: Props) {
             vectorEffect="non-scaling-stroke"
             style={{ pointerEvents: "none" }}
           />
+
+          {state.background && (
+            <BackgroundLayer
+              background={state.background}
+              editable={!state.background.locked}
+              scale={invZoom}
+              onBodyPointerDown={beginBgMove}
+              onHandlePointerDown={beginBgResize}
+            />
+          )}
 
           {state.sections.map((section) => {
             const selected = state.selectedId === section.id;
