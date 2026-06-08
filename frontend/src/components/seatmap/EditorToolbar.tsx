@@ -5,6 +5,8 @@ import { Section, Tool } from "./types";
 interface Props {
   state: EditorState;
   dispatch: React.Dispatch<EditorAction>;
+  // 선택 섹션의 좌석 편집으로 진입(통합 화면에서만 주입). 없으면 버튼을 숨긴다.
+  onEditSeats?: (section: Section) => void;
 }
 
 const TOOLS: { tool: Tool; label: string; hint: string }[] = [
@@ -25,7 +27,11 @@ const TOOLS: { tool: Tool; label: string; hint: string }[] = [
   },
 ];
 
-export default function EditorToolbar({ state, dispatch }: Props) {
+export default function EditorToolbar({
+  state,
+  dispatch,
+  onEditSeats,
+}: Props) {
   const selected: Section | undefined = state.sections.find(
     (s) => s.id === state.selectedId,
   );
@@ -108,6 +114,16 @@ export default function EditorToolbar({ state, dispatch }: Props) {
           >
             섹션 삭제
           </button>
+          {onEditSeats && (
+            <button
+              type="button"
+              onClick={() => onEditSeats(selected)}
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              title="이 섹션의 좌석맵을 편집합니다."
+            >
+              좌석 편집 →
+            </button>
+          )}
           {state.tool === "pen" && (
             <span className="text-xs text-gray-400">
               앵커 드래그=이동 · 앵커 더블클릭=곡선↔직선 · 핸들 더블클릭=직선화

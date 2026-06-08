@@ -2,11 +2,17 @@
 
 import { useEffect, useReducer } from "react";
 import { editorReducer, initialState } from "./editorReducer";
+import { Section } from "./types";
 import EditorCanvas from "./EditorCanvas";
 import EditorToolbar from "./EditorToolbar";
 import JsonPanel from "./JsonPanel";
 
-export default function SectionEditor() {
+interface Props {
+  // 선택된 섹션의 좌석 편집으로 진입하는 핸들러(통합 화면에서 주입).
+  onEditSeats?: (section: Section) => void;
+}
+
+export default function SectionEditor({ onEditSeats }: Props) {
   const [state, dispatch] = useReducer(editorReducer, initialState);
 
   // Esc: 그리던 도형 취소 / Delete: 선택 섹션 삭제
@@ -30,7 +36,11 @@ export default function SectionEditor() {
 
   return (
     <div className="flex h-full flex-col">
-      <EditorToolbar state={state} dispatch={dispatch} />
+      <EditorToolbar
+        state={state}
+        dispatch={dispatch}
+        onEditSeats={onEditSeats}
+      />
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-hidden p-4">
           <div className="h-full w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm">
