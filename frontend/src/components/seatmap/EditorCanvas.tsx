@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { clamp, dist, snapToRightAngle } from "./geometry";
+import { clamp, dist, snapCornerRightAngle, snapToRightAngle } from "./geometry";
 import {
   CLOSE_RADIUS,
   EditorAction,
@@ -98,6 +98,27 @@ export default function EditorCanvas({ state, dispatch }: Props) {
       return snapToRightAngle(state.draft[state.draft.length - 1], p);
     }
     return p;
+  }
+
+  /**
+   * 앵커 드래그 좌표. Shift 를 누르면 양 이웃 앵커와 직각을 이루는 위치로 스냅한다.
+   * (닫힌 루프이므로 prev/next 두 이웃이 항상 존재. 이웃이 겹치면 스냅하지 않는다.)
+   */
+  function anchorPoint(
+    e: React.PointerEvent,
+    sectionId: string,
+    anchorId: string,
+  ): Point {
+    if (!e.shiftKey) return toSvg(e);
+    const sec = state.sections.find((s) => s.id === sectionId);
+    if (!sec) return toSvg(e);
+    const n = sec.anchors.length;
+    const i = sec.anchors.findIndex((a) => a.id === anchorId);
+    if (i < 0 || n < 3) return toSvg(e);
+    const prev = sec.anchors[(i - 1 + n) % n];
+    const next = sec.anchors[(i + 1) % n];
+    const snapped = snapCornerRightAngle(prev, next, toContent(e));
+    return { x: clamp(snapped.x, 0, VIEW_W), y: clamp(snapped.y, 0, VIEW_H) };
   }
 
   /** 주어진 루트 좌표를 고정점으로 factor 배 줌. */
@@ -295,21 +316,20 @@ export default function EditorCanvas({ state, dispatch }: Props) {
         dispatch({ type: "RESIZE_BACKGROUND", x, y, width: w, height: h });
         return;
       }
-      const p = toSvg(e);
       if (drag.kind === "handle") {
         dispatch({
           type: "MOVE_HANDLE",
           sectionId: drag.sectionId,
           anchorId: drag.anchorId,
           side: drag.side,
-          point: p,
+          point: toSvg(e),
         });
       } else {
         dispatch({
           type: "MOVE_ANCHOR",
           sectionId: drag.sectionId,
           anchorId: drag.anchorId,
-          point: p,
+          point: anchorPoint(e, drag.sectionId, drag.anchorId),
         });
       }
       return;

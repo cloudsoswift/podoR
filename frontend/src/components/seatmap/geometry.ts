@@ -31,6 +31,23 @@ export function snapToRightAngle(prev: Point, cur: Point): Point {
 }
 
 /**
+ * 드래그 중인 앵커를 양 이웃(prev/next)과 축 정렬 직각 코너를 이루는 위치로 스냅한다.
+ * 한 이웃을 지나는 세로선(x 고정)과 다른 이웃을 지나는 가로선(y 고정)의 교점으로,
+ * 두 변이 각각 수직·수평이 되어 꼭짓점에서 직각을 이룬다.
+ * 두 조합 (prev.x, next.y) / (next.x, prev.y) 중 cursor 에 더 가까운 쪽을 택해
+ * 드래그 방향의 코너로 자연스럽게 맞춘다.
+ */
+export function snapCornerRightAngle(
+  prev: Point,
+  next: Point,
+  cursor: Point,
+): Point {
+  const a = { x: prev.x, y: next.y };
+  const b = { x: next.x, y: prev.y };
+  return dist(a, cursor) <= dist(b, cursor) ? a : b;
+}
+
+/**
  * 자연 크기(nw×nh)를 박스(bw×bh) 안에 비율 유지로 맞추고(contain) 중앙 정렬한 사각형.
  * 배경 이미지를 공연장 해상도에 자동으로 맞출 때 사용한다.
  */
