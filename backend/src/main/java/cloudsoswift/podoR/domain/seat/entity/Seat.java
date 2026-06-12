@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uk_seat_location",
-                        columnNames = {"hall_seq", "section", "row_number", "seat_number"}
+                        columnNames = {"venue_seq", "section", "row_number", "seat_number"}
                 )
         }
 )
