@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { isValidSections } from "./geometry";
-import { rowLabel } from "./seatGeometry";
+import { compactUsedSeats } from "./seatGeometry";
 import { SeatEditorAction, SeatEditorState } from "./seatEditorReducer";
 
 interface Props {
@@ -8,29 +8,12 @@ interface Props {
   dispatch: React.Dispatch<SeatEditorAction>;
 }
 
-/**
- * 저장용 좌석 목록(사용 좌석만).
- * - 행: 사용 좌석이 있는 행만 위→아래로 모아 A,B,C… 재부여(빈 앞행/중간행으로 인한 결번 없음).
- * - 열 번호: 생성 시 번호 유지(미사용 좌석으로 인한 결번은 그대로 둠).
- */
-function exportSeats(state: SeatEditorState) {
-  const used = state.seats.filter((s) => s.available);
-  const rowsPresent = [...new Set(used.map((s) => s.gridRow))].sort(
-    (a, b) => a - b,
-  );
-  const labelByRow = new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
-  return used
-    .slice()
-    .sort((a, b) => a.gridRow - b.gridRow || a.number - b.number)
-    .map((s) => ({
-      section: state.section.name,
-      row: labelByRow.get(s.gridRow),
-      number: s.number,
-    }));
-}
-
 export default function SeatJsonPanel({ state, dispatch }: Props) {
-  const rows = exportSeats(state);
+  const rows = compactUsedSeats(state.seats).map((r) => ({
+    section: state.section.name,
+    row: r.row,
+    number: r.number,
+  }));
   const exported = JSON.stringify(rows, null, 2);
   const [boundary, setBoundary] = useState("");
   const [error, setError] = useState<string | null>(null);

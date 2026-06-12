@@ -10,10 +10,17 @@ import JsonPanel from "./JsonPanel";
 interface Props {
   // 선택된 섹션의 좌석 편집으로 진입하는 핸들러(통합 화면에서 주입).
   onEditSeats?: (section: Section) => void;
+  // 섹션 목록이 바뀔 때마다 상위로 알린다(좌석맵 등록용).
+  onSectionsChange?: (sections: Section[]) => void;
 }
 
-export default function SectionEditor({ onEditSeats }: Props) {
+export default function SectionEditor({ onEditSeats, onSectionsChange }: Props) {
   const [state, dispatch] = useReducer(editorReducer, initialState);
+
+  // 섹션 목록을 상위(통합 화면)와 동기화한다.
+  useEffect(() => {
+    onSectionsChange?.(state.sections);
+  }, [state.sections, onSectionsChange]);
 
   // Esc: 그리던 도형 취소 / Delete: 선택 섹션 삭제
   useEffect(() => {

@@ -64,6 +64,29 @@ export function rowLabel(index: number): string {
   return s || "A";
 }
 
+/**
+ * 저장용 좌석 목록(사용 좌석만)으로 정규화한다.
+ * - 행: 사용 좌석이 있는 행만 위→아래로 모아 A,B,C… 재부여(빈 앞행/중간행으로 인한 결번 없음).
+ * - 열 번호: 생성 시 번호 유지(미사용 좌석으로 인한 결번은 그대로 둠).
+ */
+export function compactUsedSeats(
+  seats: Seat[],
+): { gridRow: number; row: string; number: number }[] {
+  const used = seats.filter((s) => s.available);
+  const rowsPresent = [...new Set(used.map((s) => s.gridRow))].sort(
+    (a, b) => a - b,
+  );
+  const labelByRow = new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
+  return used
+    .slice()
+    .sort((a, b) => a.gridRow - b.gridRow || a.number - b.number)
+    .map((s) => ({
+      gridRow: s.gridRow,
+      row: labelByRow.get(s.gridRow) ?? "A",
+      number: s.number,
+    }));
+}
+
 function lerp(a: Point, b: Point, t: number): Point {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
