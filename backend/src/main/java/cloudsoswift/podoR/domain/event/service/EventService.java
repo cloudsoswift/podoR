@@ -26,8 +26,12 @@ public class EventService {
     private final VenueRepository venueRepository;
     private final UserService userService;
 
-    public Page<EventResponse> getList(Pageable pageable) {
-        return eventRepository.findAllByDeletedDateIsNull(pageable).map(EventResponse::new);
+    public Page<EventResponse> getList(String keyword, Pageable pageable) {
+        String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
+        Page<Event> events = (kw == null)
+                ? eventRepository.findAllByDeletedDateIsNull(pageable)
+                : eventRepository.searchActiveEvents(kw, pageable);
+        return events.map(EventResponse::new);
     }
 
     public EventResponse getOne(String eventId) {

@@ -22,8 +22,10 @@ public class EventController {
     private final EventService eventService;
 
     @GetMapping
-    public ResponseEntity<Page<EventResponse>> getList(Pageable pageable) {
-        return ResponseEntity.ok(eventService.getList(pageable));
+    public ResponseEntity<Page<EventResponse>> getList(
+            @RequestParam(required = false) String keyword,
+            Pageable pageable) {
+        return ResponseEntity.ok(eventService.getList(keyword, pageable));
     }
 
     @GetMapping("/{eventId}")
