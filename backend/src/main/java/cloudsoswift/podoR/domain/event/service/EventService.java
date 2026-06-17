@@ -72,7 +72,8 @@ public class EventService {
     }
 
     private Venue findVenue(Long venueSeq) {
-        return venueRepository.findById(venueSeq)
+        // soft-deleted 공연장은 이벤트에 연결할 수 없도록 활성 Venue 만 조회
+        return venueRepository.findBySeqAndDeletedAtIsNull(venueSeq)
                 .orElseThrow(() -> new RuntimeException("Venue not found: " + venueSeq));
     }
 }
