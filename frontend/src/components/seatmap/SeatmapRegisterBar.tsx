@@ -7,6 +7,7 @@ import { Seat } from "./seatTypes";
 import { buildSeatmapPayload, registerSeatmap } from "./seatmapApi";
 
 interface Props {
+  venueSeq: number;
   sections: Section[];
   seatsBySection: Record<string, Seat[]>;
 }
@@ -18,11 +19,10 @@ type Status =
   | { kind: "error"; message: string };
 
 /**
- * 섹션 배치 + 좌석을 하나의 JSON 으로 합쳐 백엔드에 등록하는 상단 바.
- * venue seq 를 입력하고 '백엔드 등록'을 누르면 POST /venues/{venueSeq}/seatmap 으로 전송한다.
+ * 섹션 배치 + 좌석을 하나의 JSON 으로 합쳐 백엔드에 저장(upsert)하는 상단 바.
+ * venue 는 URL 로 특정되므로 prop 으로 받는다. POST /venues/{venueSeq}/seatmap.
  */
-export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) {
-  const [venueSeq, setVenueSeq] = useState("");
+export default function SeatmapRegisterBar({ venueSeq, sections, seatsBySection }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [showJson, setShowJson] = useState(false);
 
@@ -35,21 +35,15 @@ export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) 
     [payload],
   );
 
-  const seqNum = Number(venueSeq);
-  const seqValid = venueSeq.trim() !== "" && Number.isInteger(seqNum) && seqNum > 0;
-  const canSubmit = seqValid && status.kind !== "loading";
+  const canSubmit = status.kind !== "loading";
 
   async function handleRegister() {
-    if (!seqValid) {
-      setStatus({ kind: "error", message: "유효한 venue seq 를 입력하세요." });
-      return;
-    }
     setStatus({ kind: "loading" });
     try {
-      const result = await registerSeatmap(seqNum, payload);
+      const result = await registerSeatmap(venueSeq, payload);
       setStatus({
         kind: "success",
-        message: `등록 완료 — 섹션 ${sections.length}개 · 좌석 ${result.seatCount}석`,
+        message: `저장 완료 — 섹션 ${sections.length}개 · 좌석 ${result.seatCount}석`,
       });
     } catch (err) {
       const ax = err as AxiosError<{ message?: string }>;
@@ -57,7 +51,7 @@ export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) 
         ax.response?.status != null
           ? `(${ax.response.status}) ${ax.response.data?.message ?? ax.message}`
           : ax.message;
-      setStatus({ kind: "error", message: `등록 실패 — ${detail}` });
+      setStatus({ kind: "error", message: `저장 실패 — ${detail}` });
     }
   }
 
@@ -68,24 +62,12 @@ export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) 
   return (
     <div className="border-b border-gray-200 bg-white">
       <div className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-        <span className="text-sm font-semibold text-gray-700">좌석맵 등록</span>
+        <span className="text-sm font-semibold text-gray-700">좌석맵 저장</span>
         <span className="text-xs text-gray-400">
           섹션 {sections.length}개 · 좌석 {payload.seats.length}석
         </span>
 
         <div className="h-5 w-px bg-gray-200" />
-
-        <label className="flex items-center gap-1.5 text-xs text-gray-600">
-          venue seq
-          <input
-            type="number"
-            min={1}
-            value={venueSeq}
-            onChange={(e) => setVenueSeq(e.target.value)}
-            placeholder="예: 1"
-            className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
-          />
-        </label>
 
         <button
           type="button"
@@ -93,7 +75,7 @@ export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) 
           onClick={handleRegister}
           className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
         >
-          {status.kind === "loading" ? "등록 중…" : "백엔드 등록"}
+          {status.kind === "loading" ? "저장 중…" : "저장"}
         </button>
 
         <button
@@ -120,7 +102,7 @@ export default function SeatmapRegisterBar({ sections, seatsBySection }: Props) 
         <div className="border-t border-gray-100 px-4 py-2">
           <div className="mb-1 flex items-center justify-between">
             <span className="text-xs text-gray-500">
-              POST /venues/{seqValid ? seqNum : "{venueSeq}"}/seatmap 요청 본문
+              POST /venues/{venueSeq}/seatmap 요청 본문
             </span>
             <button
               type="button"

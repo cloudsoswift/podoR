@@ -13,9 +13,9 @@ export interface SeatmapSeatItem {
 
 // 섹션 배치 + 좌석을 합친 단일 등록 페이로드.
 export interface SeatmapPayload {
-  // 섹션 배치(Section[]) 전체를 문자열로 — VenueLayout 에 그대로 저장된다.
+  // 에디터 작업 문서(SeatmapDoc) 직렬화 문자열 — VenueLayout 에 그대로 저장된다.
   layoutJson: string;
-  // 사용 좌석 목록(섹션별로 행 압축·열 결번 규칙 적용).
+  // 사용 좌석 목록(섹션별로 행 압축·열 결번 규칙 적용) — Seat 테이블 평면 투영.
   seats: SeatmapSeatItem[];
 }
 
@@ -25,10 +25,18 @@ export interface SeatmapRegisterResult {
   seatCount: number;
 }
 
+// 에디터 작업 문서(전략 C): 섹션 배치 + 섹션별 좌석을 함께 보관해 100% 복원한다.
+export interface SeatmapDoc {
+  version: 1;
+  sections: Section[];
+  seatsBySection: Record<string, Seat[]>;
+}
+
 /**
  * SectionEditor 의 섹션 배치와 SeatEditor 의 섹션별 좌석을 하나의 등록 JSON 으로 합친다.
- * 좌석은 섹션 id 로 보관돼 있으므로, 현재 섹션 목록에서 이름을 찾아 매핑한다.
- * 이미 삭제된 섹션의 좌석은 제외한다.
+ * - layoutJson: 에디터 작업 문서(SeatmapDoc) 전체를 직렬화(섹션+좌석) → 재진입 시 복원용.
+ * - seats: 사용 좌석만 평면화(섹션 이름 기준) → 티켓팅용 Seat 테이블 투영.
+ * 이미 삭제된 섹션의 좌석은 seats 투영에서 제외한다.
  */
 export function buildSeatmapPayload(
   sections: Section[],
@@ -48,10 +56,11 @@ export function buildSeatmapPayload(
       });
     }
   }
-  return { layoutJson: JSON.stringify(sections), seats };
+  const doc: SeatmapDoc = { version: 1, sections, seatsBySection };
+  return { layoutJson: JSON.stringify(doc), seats };
 }
 
-/** 합친 좌석맵을 백엔드에 등록한다. */
+/** 합친 좌석맵을 백엔드에 등록(upsert)한다. */
 export async function registerSeatmap(
   venueSeq: number,
   payload: SeatmapPayload,
@@ -61,4 +70,50 @@ export async function registerSeatmap(
     payload,
   );
   return data;
+}
+
+// 기존 GET /venues/{seq}/layout 응답(미등록 venue 는 layoutJson=null).
+interface VenueLayoutResponse {
+  seq: number | null;
+  venueSeq: number;
+  layoutJson: string | null;
+}
+
+/** 저장된 layoutJson 을 불러온다(없으면 null). */
+export async function getVenueLayout(venueSeq: number): Promise<string | null> {
+  const { data } = await apiClient.get<VenueLayoutResponse>(
+    `/venues/${venueSeq}/layout`,
+  );
+  return data.layoutJson ?? null;
+}
+
+/**
+ * layoutJson 을 에디터 상태로 파싱한다.
+ * - 새 포맷({ version, sections, seatsBySection }) → 섹션+좌석 복원.
+ * - 레거시(바로 Section[] 배열) → 섹션만 복원, 좌석은 빈 값.
+ * - null/파싱 실패 → 빈 에디터.
+ */
+export function parseSeatmapDoc(layoutJson: string | null): {
+  sections: Section[];
+  seatsBySection: Record<string, Seat[]>;
+} {
+  if (!layoutJson) return { sections: [], seatsBySection: {} };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(layoutJson);
+  } catch {
+    return { sections: [], seatsBySection: {} };
+  }
+  if (Array.isArray(parsed)) {
+    // 레거시: layoutJson 이 Section[] 배열이던 시절.
+    return { sections: parsed as Section[], seatsBySection: {} };
+  }
+  if (parsed && typeof parsed === "object" && "sections" in parsed) {
+    const doc = parsed as Partial<SeatmapDoc>;
+    return {
+      sections: doc.sections ?? [],
+      seatsBySection: doc.seatsBySection ?? {},
+    };
+  }
+  return { sections: [], seatsBySection: {} };
 }

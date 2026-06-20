@@ -2,6 +2,7 @@
 
 import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import DataTable, { Column } from "@/components/admin/DataTable";
 import Pagination from "@/components/admin/Pagination";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
@@ -89,9 +90,15 @@ export default function AdminVenuesPage() {
     {
       key: "actions",
       header: "",
-      className: "w-32 text-right",
+      className: "w-44 text-right",
       render: (v) => (
         <div className="flex justify-end gap-3">
+          <Link
+            href={`/admin/venues/${v.seq}/seatmap`}
+            className="text-sm font-medium text-emerald-600 hover:underline cursor-pointer"
+          >
+            좌석맵
+          </Link>
           <button
             onClick={() => {
               setEditing(v);

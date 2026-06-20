@@ -8,14 +8,23 @@ import EditorToolbar from "./EditorToolbar";
 import JsonPanel from "./JsonPanel";
 
 interface Props {
+  // 로드된 저장 섹션을 주입해 복원한다(통합 화면에서 전달).
+  initialSections?: Section[];
   // 선택된 섹션의 좌석 편집으로 진입하는 핸들러(통합 화면에서 주입).
   onEditSeats?: (section: Section) => void;
   // 섹션 목록이 바뀔 때마다 상위로 알린다(좌석맵 등록용).
   onSectionsChange?: (sections: Section[]) => void;
 }
 
-export default function SectionEditor({ onEditSeats, onSectionsChange }: Props) {
+export default function SectionEditor({ initialSections, onEditSeats, onSectionsChange }: Props) {
   const [state, dispatch] = useReducer(editorReducer, initialState);
+
+  // 저장된 섹션을 한 번 주입(로드 완료 후). LOAD_SECTIONS 는 sections 를 통째로 교체한다.
+  useEffect(() => {
+    if (initialSections && initialSections.length > 0) {
+      dispatch({ type: "LOAD_SECTIONS", sections: initialSections });
+    }
+  }, [initialSections]);
 
   // 섹션 목록을 상위(통합 화면)와 동기화한다.
   useEffect(() => {
