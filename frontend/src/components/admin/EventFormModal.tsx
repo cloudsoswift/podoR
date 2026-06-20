@@ -4,9 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { EventItem, EventUpdatePayload } from "@/lib/api/events";
 import { listVenues, Venue } from "@/lib/api/venues";
 
-interface EventEditModalProps {
+interface EventFormModalProps {
   open: boolean;
-  event: EventItem | null;
+  event: EventItem | null; // null = 생성 모드
   onSubmit: (payload: EventUpdatePayload) => Promise<void>;
   onCancel: () => void;
 }
@@ -19,7 +19,8 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function EventEditModal({ open, event, onSubmit, onCancel }: EventEditModalProps) {
+export default function EventFormModal({ open, event, onSubmit, onCancel }: EventFormModalProps) {
+  const isEdit = !!event;
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [eventType, setEventType] = useState("");
@@ -31,20 +32,21 @@ export default function EventEditModal({ open, event, onSubmit, onCancel }: Even
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !event) return;
-    setTitle(event.title);
-    setContent(event.content ?? "");
-    setEventType(event.eventType);
-    setEventDate(toLocalInput(event.eventDate));
-    setTicketingDate(toLocalInput(event.ticketingDate));
-    setVenueSeq(event.venueSeq);
+    if (!open) return;
+    // 수정이면 기존 값으로, 생성이면 빈 폼으로 초기화
+    setTitle(event?.title ?? "");
+    setContent(event?.content ?? "");
+    setEventType(event?.eventType ?? "");
+    setEventDate(event ? toLocalInput(event.eventDate) : "");
+    setTicketingDate(event ? toLocalInput(event.ticketingDate) : "");
+    setVenueSeq(event?.venueSeq ?? "");
     setError(null);
     listVenues({ page: 0, size: 200 })
       .then((d) => setVenues(d.content))
       .catch(() => setVenues([]));
   }, [open, event]);
 
-  if (!open || !event) return null;
+  if (!open) return null;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -77,10 +79,12 @@ export default function EventEditModal({ open, event, onSubmit, onCancel }: Even
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-gray-900">이벤트 수정</h3>
-        <p className="mt-1 text-xs text-gray-400">
-          주최자: {event.hostNickname} · 상태: {event.streamStatus ?? "-"}
-        </p>
+        <h3 className="text-lg font-bold text-gray-900">{isEdit ? "이벤트 수정" : "이벤트 생성"}</h3>
+        {isEdit && (
+          <p className="mt-1 text-xs text-gray-400">
+            주최자: {event.hostNickname} · 상태: {event.streamStatus ?? "-"}
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-600">제목 *</label>

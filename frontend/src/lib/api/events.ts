@@ -26,8 +26,20 @@ export interface EventUpdatePayload {
   venueSeq: number;
 }
 
-export async function listEvents(params: PageParams): Promise<Page<EventItem>> {
+// 생성 요청은 수정과 동일한 필드 (host 는 서버에서 인증 주체로 설정)
+export type EventCreatePayload = EventUpdatePayload;
+
+export interface ListEventsParams extends PageParams {
+  keyword?: string;
+}
+
+export async function listEvents(params: ListEventsParams): Promise<Page<EventItem>> {
   const { data } = await apiClient.get<Page<EventItem>>("/events", { params });
+  return data;
+}
+
+export async function createEvent(payload: EventCreatePayload): Promise<EventItem> {
+  const { data } = await apiClient.post<EventItem>("/events", payload);
   return data;
 }
 
