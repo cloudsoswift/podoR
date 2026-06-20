@@ -19,9 +19,9 @@ public class VenueLayoutService {
     private final VenueRepository venueRepository;
 
     public VenueLayoutResponse getOne(Long venueSeq) {
-        VenueLayout layout = venueLayoutRepository.findByVenueSeq(venueSeq)
-                .orElseThrow(() -> new RuntimeException("VenueLayout not found for venueSeq: " + venueSeq));
-        return new VenueLayoutResponse(layout);
+        return venueLayoutRepository.findByVenueSeq(venueSeq)
+                .map(VenueLayoutResponse::new)
+                .orElseGet(() -> VenueLayoutResponse.empty(venueSeq));
     }
 
     @Transactional
