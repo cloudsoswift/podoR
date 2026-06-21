@@ -16,8 +16,9 @@
 
 ### 비목표 (이번 범위 제외)
 - User 권한 변경(USER ↔ ADMIN) 기능.
-- Event 생성 화면 (host + venue 선택 흐름 필요 → 후속 작업).
 - 통계 전용 API, 감사 로그, soft delete 복구(restore).
+
+> 추가됨(후속 → 본 범위 편입): Event 서버 검색(`GET /events?keyword=`), Event 생성 화면.
 
 ## 2. 코드베이스 기준 사실 (설계 시점 baseline)
 
@@ -76,7 +77,8 @@
   - 목록(`getList`)·조회(`getOne`)·수정(`update`) 는 **삭제되지 않은 공연장만** 대상(`findAllByDeletedAtIsNull`, `findBySeqAndDeletedAtIsNull`).
   - **삭제 가드**: `VenueService.delete` 는 `EventRepository.existsByVenue_SeqAndDeletedDateIsNull(seq)` 로 **연결된 활성 Event 존재 시 `409 CONFLICT`(ResponseStatusException)** 로 거부하고, 없으면 `venue.delete()`(soft delete).
   - soft delete 덕분에 과거 Event 가 참조하던 Venue 행은 보존되어 `EventResponse.venueName` 등 기존 참조가 깨지지 않는다.
-- **Event 검색**: 본 범위에서는 별도 백엔드 검색 파라미터를 추가하지 않고, **현재 페이지 한정 클라이언트 필터**로만 처리한다(전체 검색 아님). UI 문구도 "현재 페이지" 로 명시해 사용자가 전체 검색으로 오해하지 않게 한다. 전체 검색이 필요하면 `GET /events?keyword=` 서버 검색을 9절 후속으로 추가.
+- **Event 검색 = 서버 검색 (구현됨).** `GET /events?keyword=` 에 제목 부분일치(대소문자 무시) 검색 추가. `EventService.getList(keyword, pageable)` 가 keyword null/blank 면 `findAllByDeletedDateIsNull`, 있으면 `searchActiveEvents`(미삭제 + 제목 LIKE)로 분기(User 검색과 동일한 null-safe 패턴). 기존 비-admin 호출은 keyword 미전달이라 영향 없음.
+- **Event 생성 = `POST /events` 재사용 (구현됨).** 컨트롤러가 인증 주체를 host 로 설정하므로 admin 이 생성하면 **host = 현재 관리자**. 별도 host 선택 UI 는 두지 않음(후속 여지).
 
 ## 5. 프론트엔드 구조
 
@@ -117,9 +119,9 @@ lib/api/
 - 공연장별 "좌석맵 편집" 링크 → 기존 seatmap 스튜디오(선택적, 시간 되면).
 
 ### 5.4 Event 관리
-- 목록/상세/수정(`PUT /events/{eventId}`)/삭제.
-- 검색은 **현재 페이지 한정 클라이언트 필터**(4.5). 검색창 placeholder/문구에 "현재 페이지" 를 명시.
-- 생성은 범위 제외.
+- 목록/검색/생성/수정(`PUT /events/{eventId}`)/삭제.
+- 검색은 **서버 검색**(4.5) — 검색창 제출 시 `keyword` 로 재조회(페이지 0 리셋).
+- 생성/수정은 동일한 `EventFormModal`(공연장 select, 일시 입력) 재사용. `event` prop 이 null 이면 생성(`POST /events`), 있으면 수정.
 
 ## 6. 데이터 흐름 & 에러 처리
 - 모든 호출은 기존 `apiClient`. 401 은 인터셉터가 refresh.
@@ -146,27 +148,29 @@ lib/api/
 - `UserService.getUsers/getUserDetail/deleteUser`.
 - **Venue soft delete 전환**: `Venue.deletedAt`/`isDeleted()`/`delete()`, `VenueRepository.findAllByDeletedAtIsNull`/`findBySeqAndDeletedAtIsNull`, `VenueService` 가 활성 공연장만 다루고 삭제 시 연결 Event 체크(409) 후 soft delete.
 - `EventRepository.existsByVenue_SeqAndDeletedDateIsNull` (Venue 삭제 가드용).
+- **Event 서버 검색**: `GET /events?keyword=` (제목 부분일치), `EventService.getList(keyword, pageable)` 분기 + `EventRepository.searchActiveEvents`.
 
 ### 완료 (프론트)
 - `authStore.User` 에 `role` 추가.
 - `lib/api/{adminUsers,venues,events}.ts`, `lib/api/types.ts`(Page/PageParams), `lib/format.ts`.
 - `app/admin/layout.tsx` + `AdminGuard`, `Sidebar`.
 - 공통 컴포넌트: `DataTable`, `Pagination`, `SearchBar`, `ConfirmDialog`, `StatCard`.
-- 화면: 개요(`page.tsx`), User(목록/상세), Venue(CRUD + `VenueFormModal`), Event(목록/수정 `EventEditModal`/삭제).
+- 화면: 개요(`page.tsx`), User(목록/상세), Venue(CRUD + `VenueFormModal`), Event(목록/검색/생성·수정 `EventFormModal`/삭제).
+- `EventFormModal`: 생성·수정 공용(공연장 select, 일시 입력). `lib/api/events.ts` 에 `createEvent`/`listEvents(keyword)` 추가.
 - (별건) MSW 를 `NEXT_PUBLIC_API_MOCKING=enabled` 플래그(`npm run dev:mock`)로만 가동하도록 변경.
 
 ### 완료 (피드백 반영)
 - `UserService.deleteUser` 멱등 보강(이미 삭제 시 `deletedAt` 재갱신 방지) — 4.2 정책.
 - Venue soft delete 전환 + 삭제 시 연결 Event 체크(409) — 4.5 정책.
 - `EventService.findVenue` 가 활성 Venue(`findBySeqAndDeletedAtIsNull`)만 연결하도록 보강 — soft-deleted Venue 참조 방지.
-- Event 검색 "현재 페이지" 한정임을 UI 문구로 명시.
+- Event 검색을 서버 검색(`GET /events?keyword=`)으로 전환, 클라이언트 페이지 필터 제거.
+- Event 생성 화면(`POST /events`, host = 현재 관리자) 추가.
 
 ### 남은 작업
 - 백엔드 테스트: `AdminUserController` / `VenueService` 인가·CRUD·삭제 가드 테스트. 단, **현재 테스트 인프라가 막혀 있음**(7절/주의 — `podoR-config` 테스트 yml의 중복 키, H2 의존성 부재). 인프라 정상화 후 작성.
 
 ## 9. 후속 작업 (이번 범위 밖)
-- **Event 서버 검색**: `GET /events?keyword=` 추가 → 관리자 전체 검색 (현재는 현재 페이지 필터).
-- Event 생성 화면(host/venue 선택).
+- Event 생성 시 host 선택 UI (현재는 생성한 관리자가 host 로 고정).
 - User 권한 변경(USER ↔ ADMIN).
 - User/Venue soft delete 복구(restore).
 - 통계 전용 API.
