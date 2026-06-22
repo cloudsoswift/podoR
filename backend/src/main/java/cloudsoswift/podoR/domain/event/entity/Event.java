@@ -29,6 +29,10 @@ public class Event {
     @Comment("UUID 형태의 이벤트 식별자")
     private String eventId;
 
+    @Column(name = "series_id", nullable = false, length = 255)
+    @Comment("같은 공연의 여러 회차를 묶는 그룹키")
+    private String seriesId;
+
     @Column(nullable = false, length = 255)
     private String title;
 
@@ -67,11 +71,12 @@ public class Event {
     }
 
     @Builder
-    public Event(User host, String eventId, String title, String content,
+    public Event(User host, String eventId, String seriesId, String title, String content,
                  String eventType, LocalDateTime eventDate, LocalDateTime ticketingDate,
                  String streamKey, String streamStatus, Venue venue) {
         this.host = host;
         this.eventId = eventId;
+        this.seriesId = seriesId;
         this.title = title;
         this.content = content;
         this.eventType = eventType;

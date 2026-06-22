@@ -11,10 +11,10 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "event_seat",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_event_seat",
-                        columnNames = {"event_seq", "seat_seq"}
-                )
+                @UniqueConstraint(name = "uk_event_seat", columnNames = {"event_seq", "seat_seq"})
+        },
+        indexes = {
+                @Index(name = "ix_event_seat_change", columnList = "event_seq, change_version")
         }
 )
 @Getter
@@ -39,19 +39,34 @@ public class EventSeat {
     @Column(nullable = false)
     private Integer price;
 
-    @Column(nullable = false)
-    private Boolean status = false;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private SeatStatus status = SeatStatus.AVAILABLE;
+
+    @Column(name = "change_version", nullable = false)
+    private Long changeVersion;
 
     @Builder
-    public EventSeat(Event event, Seat seat, String seatGrade, Integer price, Boolean status) {
+    public EventSeat(Event event, Seat seat, String seatGrade, Integer price,
+                     SeatStatus status, Long changeVersion) {
         this.event = event;
         this.seat = seat;
         this.seatGrade = seatGrade;
         this.price = price;
-        this.status = status != null ? status : false;
+        this.status = status != null ? status : SeatStatus.AVAILABLE;
+        this.changeVersion = changeVersion;
     }
 
-    public void updateStatus(Boolean status) {
+    /** 등급/가격 변경(재편집 diff). changeVersion 은 호출부에서 새 값으로 갱신. */
+    public void updatePricing(String seatGrade, Integer price, Long changeVersion) {
+        this.seatGrade = seatGrade;
+        this.price = price;
+        this.changeVersion = changeVersion;
+    }
+
+    /** 판매 상태 변경(Phase 2). changeVersion 은 호출부에서 새 값으로 갱신. */
+    public void updateStatus(SeatStatus status, Long changeVersion) {
         this.status = status;
+        this.changeVersion = changeVersion;
     }
 }
