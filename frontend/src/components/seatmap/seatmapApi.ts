@@ -1,7 +1,7 @@
 import apiClient from "@/lib/axios";
 import { Section } from "./types";
 import { Seat } from "./seatTypes";
-import { compactUsedSeats } from "./seatGeometry";
+import { allSeatsForSave } from "./seatGeometry";
 
 // 백엔드 좌석 1건. (Seat 엔티티: section/row_number/seat_number/is_available)
 export interface SeatmapSeatItem {
@@ -47,12 +47,12 @@ export function buildSeatmapPayload(
   for (const [sectionId, sectionSeats] of Object.entries(seatsBySection)) {
     const name = nameById.get(sectionId);
     if (!name) continue; // 삭제된 섹션은 건너뛴다.
-    for (const r of compactUsedSeats(sectionSeats)) {
+    for (const r of allSeatsForSave(sectionSeats)) {
       seats.push({
         section: name,
         rowNumber: r.row,
         seatNumber: r.number,
-        isAvailable: true,
+        isAvailable: r.available, // 비가용 좌석도 isAvailable=false 로 저장
       });
     }
   }
