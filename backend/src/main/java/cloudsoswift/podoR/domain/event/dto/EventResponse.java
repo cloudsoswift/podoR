@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class EventResponse {
     private Long seq;
     private String eventId;
+    private String seriesId;
     private String title;
     private String content;
     private String eventType;
@@ -24,6 +25,7 @@ public class EventResponse {
     public EventResponse(Event event) {
         this.seq = event.getSeq();
         this.eventId = event.getEventId();
+        this.seriesId = event.getSeriesId();
         this.title = event.getTitle();
         this.content = event.getContent();
         this.eventType = event.getEventType();
