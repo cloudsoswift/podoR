@@ -4,6 +4,7 @@ import { Page, PageParams } from "./types";
 export interface EventItem {
   seq: number;
   eventId: string;
+  seriesId: string;
   title: string;
   content: string | null;
   eventType: string;
@@ -55,4 +56,26 @@ export async function updateEvent(eventId: string, payload: EventUpdatePayload):
 
 export async function deleteEvent(eventId: string): Promise<void> {
   await apiClient.delete(`/events/${eventId}`);
+}
+
+// 공연(시리즈) 목록 카드 — 회차가 여러 개여도 1아이템.
+export interface ConcertSummary {
+  seriesId: string;
+  representativeEventId: string;
+  title: string;
+  eventType: string;
+  venueName: string;
+  earliestEventDate: string;
+  sessionCount: number;
+}
+
+export async function listConcerts(params: PageParams): Promise<Page<ConcertSummary>> {
+  const { data } = await apiClient.get<Page<ConcertSummary>>("/events/concerts", { params });
+  return data;
+}
+
+// 같은 공연(series)의 회차 목록(이른 순).
+export async function listSessions(seriesId: string): Promise<EventItem[]> {
+  const { data } = await apiClient.get<EventItem[]>(`/events/series/${seriesId}`);
+  return data;
 }

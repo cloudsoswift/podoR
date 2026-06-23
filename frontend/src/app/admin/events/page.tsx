@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import DataTable, { Column } from "@/components/admin/DataTable";
 import Pagination from "@/components/admin/Pagination";
 import SearchBar from "@/components/admin/SearchBar";
@@ -19,6 +21,7 @@ import { formatDateTime } from "@/lib/format";
 const PAGE_SIZE = 10;
 
 export default function AdminEventsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<EventItem[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -65,12 +68,15 @@ export default function AdminEventsPage() {
   const handleSubmit = async (payload: EventUpdatePayload) => {
     if (editing) {
       await updateEvent(editing.eventId, payload);
+      setFormOpen(false);
+      setEditing(null);
+      await load();
     } else {
-      await createEvent(payload);
+      // 생성 후 좌석 플랜 페이지로 이동(2스텝)
+      const created = await createEvent(payload);
+      setFormOpen(false);
+      router.push(`/admin/events/${created.eventId}/seats`);
     }
-    setFormOpen(false);
-    setEditing(null);
-    await load();
   };
 
   const handleDelete = async () => {
@@ -101,9 +107,15 @@ export default function AdminEventsPage() {
     {
       key: "actions",
       header: "",
-      className: "w-32 text-right",
+      className: "w-48 text-right",
       render: (e) => (
         <div className="flex justify-end gap-3">
+          <Link
+            href={`/admin/events/${e.eventId}/seats`}
+            className="text-sm font-medium text-emerald-600 hover:underline cursor-pointer"
+          >
+            좌석 편집
+          </Link>
           <button
             onClick={() => {
               setEditing(e);
