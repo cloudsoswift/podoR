@@ -1,6 +1,6 @@
 package cloudsoswift.podoR.domain.event.service;
 
-import cloudsoswift.podoR.domain.event.dto.ConcertSummaryResponse;
+import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.dto.EventCreateRequest;
 import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.event.dto.EventUpdateRequest;
@@ -39,8 +39,8 @@ public class EventService {
         return new EventResponse(findActiveEvent(eventId));
     }
 
-    public Page<ConcertSummaryResponse> getConcerts(Pageable pageable) {
-        return eventRepository.findConcertSummaries(pageable);
+    public Page<EventSeriesResponse> getEventSeries(Pageable pageable) {
+        return eventRepository.findEventSeries(pageable);
     }
 
     public java.util.List<EventResponse> getSessions(String seriesId) {

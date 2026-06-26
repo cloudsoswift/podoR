@@ -1,6 +1,6 @@
 package cloudsoswift.podoR.domain.event.controller;
 
-import cloudsoswift.podoR.domain.event.dto.ConcertSummaryResponse;
+import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.dto.EventCreateRequest;
 import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.event.dto.EventUpdateRequest;
@@ -29,9 +29,9 @@ public class EventController {
         return ResponseEntity.ok(eventService.getList(keyword, pageable));
     }
 
-    @GetMapping("/concerts")
-    public ResponseEntity<Page<ConcertSummaryResponse>> getConcerts(Pageable pageable) {
-        return ResponseEntity.ok(eventService.getConcerts(pageable));
+    @GetMapping("/series-summary")
+    public ResponseEntity<Page<EventSeriesResponse>> getEventSeries(Pageable pageable) {
+        return ResponseEntity.ok(eventService.getEventSeries(pageable));
     }
 
     @GetMapping("/series/{seriesId}")
