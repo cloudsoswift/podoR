@@ -5,19 +5,19 @@ import Link from "next/link";
 import { EventItem, getEvent, listSessions } from "@/lib/api/events";
 import { formatDateTime } from "@/lib/format";
 
-export default function ConcertDetailPage({
+export default function EventDetailPage({
   params,
 }: {
-  params: Promise<{ concertId: string }>;
+  params: Promise<{ eventId: string }>;
 }) {
-  const { concertId } = use(params);
+  const { eventId } = use(params);
   const [event, setEvent] = useState<EventItem | null>(null);
   const [sessions, setSessions] = useState<EventItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    getEvent(concertId)
+    getEvent(eventId)
       .then((ev) => {
         if (!active) return;
         setEvent(ev);
@@ -32,7 +32,7 @@ export default function ConcertDetailPage({
     return () => {
       active = false;
     };
-  }, [concertId]);
+  }, [eventId]);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!event) return <p className="text-sm text-gray-500">불러오는 중…</p>;
@@ -51,7 +51,7 @@ export default function ConcertDetailPage({
           {sessions.map((s) => (
             <Link
               key={s.eventId}
-              href={`/concerts/${s.eventId}/seats`}
+              href={`/events/${s.eventId}/seats`}
               className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-indigo-300"
             >
               <span className="text-sm font-medium text-gray-800">{formatDateTime(s.eventDate)}</span>

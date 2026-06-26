@@ -58,8 +58,8 @@ export async function deleteEvent(eventId: string): Promise<void> {
   await apiClient.delete(`/events/${eventId}`);
 }
 
-// 공연(시리즈) 목록 카드 — 회차가 여러 개여도 1아이템.
-export interface ConcertSummary {
+// 공연 시리즈 목록 카드 — 같은 series_id 의 Event 회차가 여러 개여도 1아이템.
+export interface EventSeries {
   seriesId: string;
   representativeEventId: string;
   title: string;
@@ -69,8 +69,8 @@ export interface ConcertSummary {
   sessionCount: number;
 }
 
-export async function listConcerts(params: PageParams): Promise<Page<ConcertSummary>> {
-  const { data } = await apiClient.get<Page<ConcertSummary>>("/events/concerts", { params });
+export async function listEventSeries(params: PageParams): Promise<Page<EventSeries>> {
+  const { data } = await apiClient.get<Page<EventSeries>>("/events/series-summary", { params });
   return data;
 }
 
