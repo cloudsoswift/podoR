@@ -33,6 +33,17 @@ export interface SeatmapDoc {
 }
 
 /**
+ * 같은 이름을 가진 섹션 이름 목록(중복분만).
+ * 좌석은 섹션 '이름'으로 저장되므로(seat.section), 서로 다른 섹션이 같은 이름이면
+ * 좌석 키(section,row,seat)가 충돌해 백엔드 seat_unique 제약을 위반한다. 저장 전 차단용.
+ */
+export function findDuplicateSectionNames(sections: Section[]): string[] {
+  const counts = new Map<string, number>();
+  for (const s of sections) counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+  return [...counts.entries()].filter(([, n]) => n > 1).map(([name]) => name);
+}
+
+/**
  * SectionEditor 의 섹션 배치와 SeatEditor 의 섹션별 좌석을 하나의 등록 JSON 으로 합친다.
  * - layoutJson: 에디터 작업 문서(SeatmapDoc) 전체를 직렬화(섹션+좌석) → 재진입 시 복원용.
  * - seats: 사용 좌석만 평면화(섹션 이름 기준) → 티켓팅용 Seat 테이블 투영.

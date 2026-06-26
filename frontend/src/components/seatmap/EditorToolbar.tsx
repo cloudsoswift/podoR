@@ -35,6 +35,12 @@ export default function EditorToolbar({
   const selected: Section | undefined = state.sections.find(
     (s) => s.id === state.selectedId,
   );
+  // 선택 섹션의 이름이 다른 섹션과 겹치는지(좌석은 섹션 이름으로 저장되어 중복 시 저장이 막힌다).
+  const isDuplicateName =
+    selected != null &&
+    state.sections.some(
+      (s) => s.id !== selected.id && s.name === selected.name,
+    );
   const activeHint = TOOLS.find((t) => t.tool === state.tool)?.hint;
   const bg = state.background;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,8 +98,21 @@ export default function EditorToolbar({
                 name: e.target.value,
               })
             }
-            className="w-32 rounded-md border border-gray-300 px-2 py-1 text-sm"
+            aria-invalid={isDuplicateName}
+            title={
+              isDuplicateName ? "다른 섹션과 이름이 중복됩니다." : undefined
+            }
+            className={`w-32 rounded-md border px-2 py-1 text-sm ${
+              isDuplicateName
+                ? "border-red-400 bg-red-50 text-red-700 focus:outline-red-400"
+                : "border-gray-300"
+            }`}
           />
+          {isDuplicateName && (
+            <span className="text-xs font-medium text-red-600">
+              이름 중복
+            </span>
+          )}
           <input
             type="color"
             value={selected.color}

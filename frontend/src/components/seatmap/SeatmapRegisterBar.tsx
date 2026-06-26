@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import { AxiosError } from "axios";
 import { Section } from "./types";
 import { Seat } from "./seatTypes";
-import { buildSeatmapPayload, registerSeatmap } from "./seatmapApi";
+import {
+  buildSeatmapPayload,
+  findDuplicateSectionNames,
+  registerSeatmap,
+} from "./seatmapApi";
 
 interface Props {
   venueSeq: number;
@@ -35,9 +39,22 @@ export default function SeatmapRegisterBar({ venueSeq, sections, seatsBySection 
     [payload],
   );
 
-  const canSubmit = status.kind !== "loading";
+  const duplicateNames = useMemo(
+    () => findDuplicateSectionNames(sections),
+    [sections],
+  );
+  const hasDuplicateNames = duplicateNames.length > 0;
+
+  const canSubmit = status.kind !== "loading" && !hasDuplicateNames;
 
   async function handleRegister() {
+    if (hasDuplicateNames) {
+      setStatus({
+        kind: "error",
+        message: `저장 실패 — 섹션 이름이 중복되었습니다: ${duplicateNames.join(", ")}. 이름을 다르게 지정하세요.`,
+      });
+      return;
+    }
     setStatus({ kind: "loading" });
     try {
       const result = await registerSeatmap(venueSeq, payload);
@@ -86,6 +103,11 @@ export default function SeatmapRegisterBar({ venueSeq, sections, seatsBySection 
           {showJson ? "JSON 닫기" : "합친 JSON 보기"}
         </button>
 
+        {hasDuplicateNames && (
+          <span className="text-xs font-medium text-amber-600">
+            섹션 이름 중복: {duplicateNames.join(", ")} — 이름을 다르게 지정하세요.
+          </span>
+        )}
         {status.kind === "success" && (
           <span className="text-xs font-medium text-emerald-600">
             {status.message}
