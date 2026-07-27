@@ -1,0 +1,17 @@
+# 빌드 산출물/캐시 — 컨테이너에서 새로 빌드하므로 제외
+build/
+**/build/
+.gradle/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# VCS 메타데이터 (서브모듈 '작업 트리 파일'은 남고 .git 메타만 제외됨)
+.git/
+**/.git/
+
+# 로그
+*.log

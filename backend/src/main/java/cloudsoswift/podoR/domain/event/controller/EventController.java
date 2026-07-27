@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.event.controller;
 
+import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.dto.EventCreateRequest;
 import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.event.dto.EventUpdateRequest;
@@ -26,6 +27,16 @@ public class EventController {
             @RequestParam(required = false) String keyword,
             Pageable pageable) {
         return ResponseEntity.ok(eventService.getList(keyword, pageable));
+    }
+
+    @GetMapping("/series-summary")
+    public ResponseEntity<Page<EventSeriesResponse>> getEventSeries(Pageable pageable) {
+        return ResponseEntity.ok(eventService.getEventSeries(pageable));
+    }
+
+    @GetMapping("/series/{seriesId}")
+    public ResponseEntity<java.util.List<EventResponse>> getSessions(@PathVariable String seriesId) {
+        return ResponseEntity.ok(eventService.getSessions(seriesId));
     }
 
     @GetMapping("/{eventId}")

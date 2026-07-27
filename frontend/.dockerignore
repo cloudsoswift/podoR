@@ -1,0 +1,21 @@
+# 의존성/빌드 산출물 — 컨테이너에서 새로 설치/빌드
+node_modules/
+.next/
+out/
+
+# 로컬 .env — NEXT_PUBLIC_API_URL 은 compose build arg 로 주입하므로
+# 로컬 값(localhost)이 섞이지 않도록 제외
+.env
+.env.*.local
+.env.local
+
+# IDE / OS / VCS
+.idea/
+.vscode/
+.DS_Store
+.git/
+*.log
+
+# 도커 파일 자체
+Dockerfile
+.dockerignore

@@ -87,6 +87,31 @@ export function compactUsedSeats(
     }));
 }
 
+/**
+ * 저장용 전체 좌석 목록(가용/비가용 모두).
+ * - 행 라벨: 좌석이 존재하는 gridRow 를 위→아래로 모아 A,B,C… (가용 여부와 무관, 비가용 포함).
+ * - 열 번호: 생성 시 number 유지.
+ * - available: 좌석의 사용 여부 그대로.
+ * 압축(사용 행만 재라벨)을 하지 않으므로 가용/비가용 좌석 라벨이 충돌하지 않는다.
+ */
+export function allSeatsForSave(
+  seats: Seat[],
+): { gridRow: number; row: string; number: number; available: boolean }[] {
+  const rowsPresent = [...new Set(seats.map((s) => s.gridRow))].sort(
+    (a, b) => a - b,
+  );
+  const labelByRow = new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
+  return seats
+    .slice()
+    .sort((a, b) => a.gridRow - b.gridRow || a.number - b.number)
+    .map((s) => ({
+      gridRow: s.gridRow,
+      row: labelByRow.get(s.gridRow) ?? "A",
+      number: s.number,
+      available: s.available,
+    }));
+}
+
 function lerp(a: Point, b: Point, t: number): Point {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
