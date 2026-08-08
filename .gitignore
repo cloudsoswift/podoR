@@ -1,0 +1,12 @@
+# === 환경변수 (compose) ===
+# 실제 값(비밀번호·JWT_SECRET 등)이 든 .env 는 커밋 금지. 템플릿(.env.example)만 추적.
+.env
+.env.*
+!.env.example
+
+# === TLS 인증서 / 개인키 ===
+# nginx 등에서 쓰는 crt/key 는 서버 로컬(예: /srv/apps/podor/certs)에만 두고 커밋 금지.
+/certs/
+*.crt
+*.key
+*.pem

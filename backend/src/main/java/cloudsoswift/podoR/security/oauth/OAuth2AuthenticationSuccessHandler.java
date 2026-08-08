@@ -48,7 +48,7 @@ public class OAuth2AuthenticationSuccessHandler
                 .httpOnly(true)          // JS 접근 차단 → XSS 방어
                 .secure(true)            // HTTPS only
                 .sameSite("Strict")      // 타 사이트에서 쿠키 전송 차단 → CSRF 방어
-                .path("/oauth2/token/refresh")   // refresh 엔드포인트에만 전송
+                .path("/api/oauth2/token/refresh")   // refresh 엔드포인트에만 전송
                 .maxAge(Duration.ofMillis(REFRESH_TOKEN_EXPIRE_MS))
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

@@ -52,7 +52,7 @@ public class TokenController {
                 .httpOnly(true)
                 .secure(true)
                 .sameSite("Strict")
-                .path("/oauth2/token/refresh")  // 발급 시와 동일한 path
+                .path("/api/oauth2/token/refresh")  // 발급 시와 동일한 path
                 .maxAge(0)
                 .build();
 
