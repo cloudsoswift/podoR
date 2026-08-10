@@ -21,6 +21,9 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     // 특정 공연장에 연결된 활성(미삭제) 이벤트 존재 여부 — Venue 삭제 가드용
     boolean existsByVenue_SeqAndDeletedDateIsNull(Long venueSeq);
 
+    // 특정 공연장의 활성 이벤트(이른 순) — 소비자 공연장 상세용
+    java.util.List<Event> findAllByVenue_SeqAndDeletedDateIsNullOrderByEventDateAsc(Long venueSeq);
+
     // Admin: 미삭제 이벤트 제목 검색(부분일치). keyword 는 non-null 전제.
     @Query("SELECT e FROM Event e WHERE e.deletedDate IS NULL AND " +
             "LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%'))")

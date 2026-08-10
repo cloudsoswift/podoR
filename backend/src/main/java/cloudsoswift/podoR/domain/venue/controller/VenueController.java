@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.venue.controller;
 
+import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.venue.dto.VenueCreateRequest;
 import cloudsoswift.podoR.domain.venue.dto.VenueResponse;
 import cloudsoswift.podoR.domain.venue.dto.VenueUpdateRequest;
@@ -12,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -21,7 +23,6 @@ public class VenueController {
     private final VenueService venueService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<VenueResponse>> getList(Pageable pageable) {
         return ResponseEntity.ok(venueService.getList(pageable));
     }
@@ -29,6 +30,12 @@ public class VenueController {
     @GetMapping("/{seq}")
     public ResponseEntity<VenueResponse> getOne(@PathVariable Long seq) {
         return ResponseEntity.ok(venueService.getOne(seq));
+    }
+
+    // 공연장의 활성 이벤트 목록 (공개)
+    @GetMapping("/{seq}/events")
+    public ResponseEntity<List<EventResponse>> getVenueEvents(@PathVariable Long seq) {
+        return ResponseEntity.ok(venueService.getVenueEvents(seq));
     }
 
     @PostMapping

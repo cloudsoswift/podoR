@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -41,6 +42,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()
                         .requestMatchers("/oauth2/**").permitAll()
+                        // 소비자 조회(GET)만 공개 — 쓰기/관리자/`/users/**` 는 보호 유지
+                        .requestMatchers(HttpMethod.GET,
+                                "/events/series-summary",
+                                "/events/series/*",
+                                "/events/*",
+                                "/events/*/seat-view",
+                                "/events/*/seat-view/changes",
+                                "/venues",
+                                "/venues/*",
+                                "/venues/*/layout",
+                                "/venues/*/events").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception
                         // 인증되지 않은 사용자가 인증이 필요한 API에 접근할 때 동작

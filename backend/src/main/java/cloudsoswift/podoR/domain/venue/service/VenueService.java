@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.venue.service;
 
+import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.venue.dto.VenueCreateRequest;
 import cloudsoswift.podoR.domain.venue.dto.VenueResponse;
@@ -28,6 +29,15 @@ public class VenueService {
 
     public VenueResponse getOne(Long seq) {
         return new VenueResponse(findActiveVenue(seq));
+    }
+
+    // 공연장의 활성 이벤트 목록(소비자 상세용)
+    public java.util.List<EventResponse> getVenueEvents(Long venueSeq) {
+        return eventRepository
+                .findAllByVenue_SeqAndDeletedDateIsNullOrderByEventDateAsc(venueSeq)
+                .stream()
+                .map(EventResponse::new)
+                .toList();
     }
 
     @Transactional
