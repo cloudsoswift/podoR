@@ -39,9 +39,8 @@ export default function Header() {
           <Link href="/" className="text-2xl font-bold text-indigo-600">podoR</Link>
           <nav className="hidden md:flex gap-6 text-sm font-medium text-gray-600">
             <Link href="/" className="hover:text-indigo-600">홈</Link>
-            <Link href="#" className="hover:text-indigo-600">장르별</Link>
-            <Link href="#" className="hover:text-indigo-600">랭킹</Link>
-            <Link href="#" className="hover:text-indigo-600">할인</Link>
+            <Link href="/events" className="hover:text-indigo-600">공연</Link>
+            <Link href="/venues" className="hover:text-indigo-600">공연장</Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
@@ -52,9 +51,9 @@ export default function Header() {
             <input className="bg-transparent text-sm outline-none w-40" placeholder="공연명, 아티스트 검색" />
           </div>
           {isLoggedIn && user && (
-            <span className="text-sm font-medium text-gray-700">
-              {user.nickname}님 환영합니다!
-            </span>
+            <Link href="/mypage" className="text-sm font-medium text-gray-700 hover:text-indigo-600">
+              {user.nickname}님
+            </Link>
           )}
           {isLoggedIn ? (
             <button onClick={handleLogout} className={buttonClass}>
