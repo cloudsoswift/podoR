@@ -1,28 +1,41 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import VenueList from "@/components/venue/VenueList";
 import { Venue } from "@/components/venue/VenueCard";
-
-const placeholderVenues: Venue[] = [
-  {
-    seq: 1,
-    name: "올림픽공원 KSPO돔",
-    address: "서울특별시 송파구 올림픽로 424",
-    description: "국내 최대 규모의 실내 공연장으로, 약 15,000석 규모를 보유하고 있습니다.",
-    venueImage: null,
-  },
-  {
-    seq: 2,
-    name: "잠실종합운동장",
-    address: "서울특별시 송파구 올림픽로 25",
-    description: "서울을 대표하는 대형 야외 공연장입니다.",
-    venueImage: null,
-  },
-];
+import { listVenues } from "@/lib/api/venues";
 
 export default function VenuesPage() {
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    listVenues({ page: 0, size: 50, sort: "name,asc" })
+      .then((d) => {
+        if (active) setVenues(d.content);
+      })
+      .catch(() => {
+        if (active) setError("공연장 목록을 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">공연장</h1>
-      <VenueList venues={placeholderVenues} />
+      {loading && <p className="text-sm text-gray-500">불러오는 중…</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!loading && !error && venues.length === 0 && (
+        <p className="text-sm text-gray-400">등록된 공연장이 없습니다.</p>
+      )}
+      {venues.length > 0 && <VenueList venues={venues} />}
     </div>
   );
 }
