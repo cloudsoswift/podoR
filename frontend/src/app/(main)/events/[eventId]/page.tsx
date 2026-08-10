@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { EventItem, getEvent, listSessions } from "@/lib/api/events";
 import { formatDateTime } from "@/lib/format";
+import { pushRecentEvent } from "@/lib/recentEvents";
 
 export default function EventDetailPage({
   params,
@@ -17,6 +18,7 @@ export default function EventDetailPage({
 
   useEffect(() => {
     let active = true;
+    pushRecentEvent(eventId);   // 최근 조회 기록
     getEvent(eventId)
       .then((ev) => {
         if (!active) return;
