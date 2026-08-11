@@ -8,6 +8,7 @@ import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.seatview.dto.SeatViewChangesResponse;
 import cloudsoswift.podoR.domain.seatview.dto.SeatViewResponse;
 import cloudsoswift.podoR.domain.seatview.dto.SeatViewSeatDto;
+import cloudsoswift.podoR.domain.ticketing.hold.SeatHoldService;
 import cloudsoswift.podoR.domain.venue.repository.VenueLayoutRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,13 +27,18 @@ public class SeatViewService {
     private final EventSeatRepository eventSeatRepository;
     private final VenueLayoutRepository venueLayoutRepository;
     private final SeatViewSnapshotCache snapshotCache;
+    private final SeatHoldService seatHoldService;
 
     public SeatViewResponse getSnapshot(String eventId) {
-        return snapshotCache.get(eventId).orElseGet(() -> {
+        SeatViewResponse cached = snapshotCache.get(eventId).orElseGet(() -> {
             SeatViewResponse fresh = buildSnapshot(eventId);
             snapshotCache.put(fresh);
             return fresh;
         });
+        // heldSeats 는 항상 실시간 Redis 로 갱신(캐시된 값 무시)
+        List<Long> allSeqs = cached.seats().stream().map(SeatViewSeatDto::eventSeatSeq).toList();
+        return new SeatViewResponse(cached.eventId(), cached.cursor(), cached.layoutJson(),
+                cached.seats(), seatHoldService.heldAmong(allSeqs));
     }
 
     private SeatViewResponse buildSnapshot(String eventId) {
@@ -42,7 +48,8 @@ public class SeatViewService {
         String layoutJson = venueLayoutRepository.findByVenueSeq(event.getVenue().getSeq())
                 .map(l -> l.getLayoutJson()).orElse(null);
         List<SeatViewSeatDto> dtos = seats.stream().map(SeatViewSeatDto::from).toList();
-        return new SeatViewResponse(eventId, cursor, layoutJson, dtos);
+        // 캐시에는 heldSeats 를 비워 저장(실시간성 위해 getSnapshot 에서 덮어씀)
+        return new SeatViewResponse(eventId, cursor, layoutJson, dtos, List.of());
     }
 
     public SeatViewChangesResponse getChanges(String eventId, long since, String section) {
@@ -51,7 +58,11 @@ public class SeatViewService {
                 ? eventSeatRepository.findChangesSince(event.getSeq(), since)
                 : eventSeatRepository.findChangesSinceInSection(event.getSeq(), since, section);
         long cursor = changed.stream().mapToLong(EventSeat::getChangeVersion).max().orElse(since);
-        return new SeatViewChangesResponse(cursor, changed.stream().map(SeatViewSeatDto::from).toList());
+        // 현재 이벤트 전체 좌석 기준 선점 집합(작아서 저렴)
+        List<Long> allSeqs = eventSeatRepository.findAllByEventSeqWithSeat(event.getSeq())
+                .stream().map(EventSeat::getSeq).toList();
+        return new SeatViewChangesResponse(cursor, changed.stream().map(SeatViewSeatDto::from).toList(),
+                seatHoldService.heldAmong(allSeqs));
     }
 
     private Event findEvent(String eventId) {
