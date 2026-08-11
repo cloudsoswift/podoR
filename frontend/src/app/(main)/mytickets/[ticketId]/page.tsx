@@ -2,7 +2,9 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TicketDetail, getMyTicket } from "@/lib/api/mytickets";
+import { cancelOrder } from "@/lib/api/ticketing";
 import { formatDateTime } from "@/lib/format";
 
 export default function MyTicketDetailPage({
@@ -11,8 +13,19 @@ export default function MyTicketDetailPage({
   params: Promise<{ ticketId: string }>;
 }) {
   const { ticketId } = use(params);
+  const router = useRouter();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleCancel() {
+    if (!ticket || !confirm("예매를 취소하시겠어요?")) return;
+    try {
+      await cancelOrder(ticket.eventId, ticket.orderNumber);
+      router.replace("/mypage");
+    } catch {
+      alert("예매 취소에 실패했습니다.");
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -62,6 +75,15 @@ export default function MyTicketDetailPage({
           ))}
         </div>
       </div>
+
+      {ticket.status === "PAID" && (
+        <button
+          onClick={handleCancel}
+          className="w-full rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+        >
+          예매 취소
+        </button>
+      )}
     </div>
   );
 }
