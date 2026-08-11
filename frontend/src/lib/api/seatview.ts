@@ -16,11 +16,13 @@ export interface SeatViewSnapshot {
   cursor: number;
   layoutJson: string | null;
   seats: SeatViewSeat[];
+  heldSeats: number[];
 }
 
 export interface SeatViewChanges {
   cursor: number;
   seats: SeatViewSeat[];
+  heldSeats: number[];
 }
 
 export async function getSeatView(eventId: string): Promise<SeatViewSnapshot> {
