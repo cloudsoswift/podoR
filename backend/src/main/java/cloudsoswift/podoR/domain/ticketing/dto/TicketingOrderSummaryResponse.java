@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 /** 예매내역 목록 카드. */
 @Getter
 public class TicketingOrderSummaryResponse {
+    private final String eventId;
     private final String orderNumber;
     private final String eventTitle;
     private final String venueName;
@@ -18,6 +19,7 @@ public class TicketingOrderSummaryResponse {
     private final int seatCount;
 
     public TicketingOrderSummaryResponse(TicketingOrder o) {
+        this.eventId = o.getEvent().getEventId();
         this.orderNumber = o.getOrderNumber();
         this.eventTitle = o.getEvent().getTitle();
         this.venueName = o.getEvent().getVenue().getName();

@@ -10,6 +10,7 @@ import java.util.List;
 /** 예매 상세: 공연 간략 + 예매 정보 + 좌석 목록. */
 @Getter
 public class TicketingOrderDetailResponse {
+    private final String eventId;
     private final String orderNumber;
     private final LocalDateTime orderedAt;
     private final String status;
@@ -21,6 +22,7 @@ public class TicketingOrderDetailResponse {
     private final List<Seat> seats;
 
     public TicketingOrderDetailResponse(TicketingOrder o) {
+        this.eventId = o.getEvent().getEventId();
         this.orderNumber = o.getOrderNumber();
         this.orderedAt = o.getOrderedAt();
         this.status = o.getStatus();
