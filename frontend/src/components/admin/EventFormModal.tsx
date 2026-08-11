@@ -27,6 +27,7 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
   const [eventDate, setEventDate] = useState("");
   const [ticketingDate, setTicketingDate] = useState("");
   const [venueSeq, setVenueSeq] = useState<number | "">("");
+  const [maxSeatsPerPerson, setMaxSeatsPerPerson] = useState<number>(4);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
     setEventDate(event ? toLocalInput(event.eventDate) : "");
     setTicketingDate(event ? toLocalInput(event.ticketingDate) : "");
     setVenueSeq(event?.venueSeq ?? "");
+    setMaxSeatsPerPerson(event?.maxSeatsPerPerson ?? 4);
     setError(null);
     listVenues({ page: 0, size: 200 })
       .then((d) => setVenues(d.content))
@@ -64,6 +66,7 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
         eventDate,
         ticketingDate,
         venueSeq: Number(venueSeq),
+        maxSeatsPerPerson,
       });
     } catch {
       setError("저장에 실패했습니다.");
@@ -128,6 +131,16 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
                 onChange={(e) => setTicketingDate(e.target.value)}
               />
             </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-600">1인 최대 좌석수 (시리즈 기준)</label>
+            <input
+              type="number"
+              min={1}
+              className={field}
+              value={maxSeatsPerPerson}
+              onChange={(e) => setMaxSeatsPerPerson(Math.max(1, Number(e.target.value) || 1))}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-600">내용</label>
