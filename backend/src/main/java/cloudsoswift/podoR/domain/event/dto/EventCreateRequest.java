@@ -14,4 +14,5 @@ public class EventCreateRequest {
     private LocalDateTime eventDate;
     private LocalDateTime ticketingDate;
     private Long venueSeq;
+    private Integer maxSeatsPerPerson;   // 시리즈 1인 최대 좌석수(미지정 시 서비스 기본값)
 }

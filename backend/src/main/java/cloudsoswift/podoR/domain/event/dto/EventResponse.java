@@ -21,6 +21,7 @@ public class EventResponse {
     private String venueName;
     private Long hostSeq;
     private String hostNickname;
+    private Integer maxSeatsPerPerson;
 
     public EventResponse(Event event) {
         this.seq = event.getSeq();
@@ -37,5 +38,9 @@ public class EventResponse {
         this.venueName = event.getVenue().getName();
         this.hostSeq = event.getHost().getSeq();
         this.hostNickname = event.getHost().getNickname();
+    }
+
+    public void setMaxSeatsPerPerson(Integer maxSeatsPerPerson) {
+        this.maxSeatsPerPerson = maxSeatsPerPerson;
     }
 }
