@@ -50,6 +50,9 @@ public class TicketingOrder {
     @OneToMany(mappedBy = "ticketingOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TicketingItem> items = new ArrayList<>();
 
+    @OneToOne(mappedBy = "ticketingOrder", fetch = FetchType.LAZY)
+    private Payment payment;
+
     @PrePersist
     protected void onCreate() {
         orderedAt = LocalDateTime.now();
