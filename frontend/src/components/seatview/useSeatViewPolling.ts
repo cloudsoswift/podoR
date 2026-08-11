@@ -10,6 +10,7 @@ import { getSeatView, getSeatViewChanges, SeatViewSeat } from "@/lib/api/seatvie
 export function useSeatViewPolling(eventId: string, section?: string, intervalMs = 2500) {
   const [seats, setSeats] = useState<Map<number, SeatViewSeat>>(new Map());
   const [layoutJson, setLayoutJson] = useState<string | null>(null);
+  const [heldSeats, setHeldSeats] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const cursorRef = useRef(0);
 
@@ -28,6 +29,7 @@ export function useSeatViewPolling(eventId: string, section?: string, intervalMs
             return next;
           });
         }
+        setHeldSeats(ch.heldSeats ?? []);   // 선점은 매 폴링 최신 집합으로 대체
         cursorRef.current = ch.cursor;
       } catch {
         // 429/일시 오류는 다음 주기에 재시도
@@ -43,6 +45,7 @@ export function useSeatViewPolling(eventId: string, section?: string, intervalMs
         if (!alive) return;
         setLayoutJson(snap.layoutJson);
         setSeats(new Map(snap.seats.map((s) => [s.eventSeatSeq, s])));
+        setHeldSeats(snap.heldSeats ?? []);
         cursorRef.current = snap.cursor;
       } finally {
         if (alive) {
@@ -58,5 +61,5 @@ export function useSeatViewPolling(eventId: string, section?: string, intervalMs
     };
   }, [eventId, section, intervalMs]);
 
-  return { seats: [...seats.values()], layoutJson, loading };
+  return { seats: [...seats.values()], layoutJson, heldSeats, loading };
 }
