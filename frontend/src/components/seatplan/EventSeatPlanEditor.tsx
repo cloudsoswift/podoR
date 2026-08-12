@@ -179,11 +179,15 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
                 onChange={(e) => patchGrade(i, { grade: e.target.value })}
               />
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className={field}
                 placeholder="가격"
-                value={g.price}
-                onChange={(e) => patchGrade(i, { price: Number(e.target.value) })}
+                value={g.price ? g.price.toLocaleString() : ""}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  patchGrade(i, { price: digits ? Number(digits) : 0 });
+                }}
               />
               <button
                 onClick={() => removeGrade(i)}
