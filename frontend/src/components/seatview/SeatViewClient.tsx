@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSeatViewPolling } from "./useSeatViewPolling";
 import { parseSeatmapDoc } from "@/components/seatmap/seatmapApi";
-import { holdSeats } from "@/lib/api/ticketing";
+import { holdSeats, getMySeatQuota } from "@/lib/api/ticketing";
 
 /**
  * Section Viewer(섹션 미선택) ↔ SeatMap Viewer(섹션 선택)를 한 화면에서 오간다.
@@ -15,7 +15,17 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [section, setSection] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const { seats, layoutJson, heldSeats, loading } = useSeatViewPolling(eventId, section);
+  const [quota, setQuota] = useState<{ used: number; max: number } | null>(null);
+  const [cooling, setCooling] = useState(false);
+  const { seats, layoutJson, heldSeats, loading, refresh } = useSeatViewPolling(eventId, section);
+
+  const loadQuota = useCallback(() => {
+    getMySeatQuota(eventId).then(setQuota).catch(() => {});
+  }, [eventId]);
+
+  useEffect(() => {
+    loadQuota();
+  }, [loadQuota]);
   const doc = useMemo(() => parseSeatmapDoc(layoutJson), [layoutJson]);
   const heldSet = useMemo(() => new Set(heldSeats), [heldSeats]);
 
@@ -33,8 +43,18 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
   function toggleSeat(seq: number) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(seq)) next.delete(seq);
-      else next.add(seq);
+      if (next.has(seq)) {
+        next.delete(seq);
+        return next;
+      }
+      if (quota) {
+        const remaining = quota.max - quota.used; // 이미 쓴(선점+예매) 좌석 제외 잔여
+        if (next.size >= remaining) {
+          alert(`이 공연은 1인 최대 ${quota.max}석까지 예매할 수 있습니다.`);
+          return prev;
+        }
+      }
+      next.add(seq);
       return next;
     });
   }
@@ -48,7 +68,16 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
     } catch {
       alert("선택한 좌석 중 일부를 예매할 수 없습니다. 좌석 현황을 다시 확인해주세요.");
       setSelected(new Set());
+      loadQuota();
     }
+  }
+
+  function handleRefresh() {
+    if (cooling) return;
+    setCooling(true);
+    refresh();
+    loadQuota();
+    setTimeout(() => setCooling(false), 3000);
   }
 
   const checkoutBar =
@@ -66,6 +95,12 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
       </div>
     ) : null;
 
+  const quotaBadge = quota ? (
+    <div className="fixed right-3 top-3 z-40 rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-medium text-gray-700 shadow-sm">
+      현재 {quota.used} / {quota.max}
+    </div>
+  ) : null;
+
   if (loading) {
     return <div className="p-8 text-sm text-gray-500">불러오는 중…</div>;
   }
@@ -73,6 +108,7 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
   if (!section) {
     return (
       <div className="p-4 pb-20">
+        {quotaBadge}
         <h2 className="mb-3 text-lg font-bold text-gray-900">섹션 선택</h2>
         <div className="flex flex-wrap gap-2">
           {doc.sections.map((sec) => {
@@ -111,9 +147,19 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
 
   return (
     <div className="p-4 pb-20">
-      <button onClick={() => setSection(undefined)} className="mb-3 text-sm text-indigo-600 hover:underline">
-        ← 전체 섹션
-      </button>
+      {quotaBadge}
+      <div className="mb-3 flex items-center justify-between">
+        <button onClick={() => setSection(undefined)} className="text-sm text-indigo-600 hover:underline">
+          ← 전체 섹션
+        </button>
+        <button
+          onClick={handleRefresh}
+          disabled={cooling}
+          className="rounded-lg border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >
+          {cooling ? "새로고침 대기…" : "새로고침"}
+        </button>
+      </div>
       <h2 className="mb-3 text-lg font-bold text-gray-900">{section}</h2>
       <div className="flex flex-wrap gap-1">
         {sectionSeats.map((s) => {
