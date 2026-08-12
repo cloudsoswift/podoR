@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { getSeatView, getSeatViewChanges, SeatViewSeat } from "@/lib/api/seatview";
 
 /**
@@ -12,6 +12,8 @@ export function useSeatViewPolling(eventId: string, section?: string, intervalMs
   const [layoutJson, setLayoutJson] = useState<string | null>(null);
   const [heldSeats, setHeldSeats] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
   const cursorRef = useRef(0);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function useSeatViewPolling(eventId: string, section?: string, intervalMs
       alive = false;
       clearTimeout(timer);
     };
-  }, [eventId, section, intervalMs]);
+  }, [eventId, section, intervalMs, refreshTick]);
 
-  return { seats: [...seats.values()], layoutJson, heldSeats, loading };
+  return { seats: [...seats.values()], layoutJson, heldSeats, loading, refresh };
 }
