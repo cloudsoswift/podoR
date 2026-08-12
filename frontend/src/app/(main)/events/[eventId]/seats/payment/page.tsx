@@ -12,24 +12,23 @@ export default function PaymentPage({
   const { eventId } = use(params);
   const router = useRouter();
   const search = useSearchParams();
-  const seatSeqs = (search.get("seats") ?? "")
-    .split(",")
-    .filter(Boolean)
-    .map(Number);
+  const seatsParam = search.get("seats") ?? "";
+  const seatSeqs = seatsParam.split(",").filter(Boolean).map(Number);
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(false);
 
   // 결제 완료 없이 이탈하면 선점 해제
   useEffect(() => {
     const release = () => {
-      if (!done) releaseHolds(eventId).catch(() => {});
+      if (!done && seatSeqs.length > 0) releaseHolds(eventId, seatSeqs).catch(() => {});
     };
     window.addEventListener("beforeunload", release);
     return () => {
       window.removeEventListener("beforeunload", release);
       release();
     };
-  }, [eventId, done]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, done, seatsParam]);
 
   async function handlePay() {
     setPaying(true);

@@ -11,8 +11,18 @@ export async function holdSeats(eventId: string, eventSeatSeqs: number[]): Promi
   return data;
 }
 
-export async function releaseHolds(eventId: string): Promise<void> {
-  await apiClient.delete(`/events/${eventId}/holds`);
+export async function releaseHolds(eventId: string, eventSeatSeqs: number[]): Promise<void> {
+  await apiClient.delete(`/events/${eventId}/holds`, { data: { eventSeatSeqs } });
+}
+
+export interface SeatQuota {
+  used: number;
+  max: number;
+}
+
+export async function getMySeatQuota(eventId: string): Promise<SeatQuota> {
+  const { data } = await apiClient.get<SeatQuota>(`/events/${eventId}/my-seat-quota`);
+  return data;
 }
 
 export async function createOrder(
