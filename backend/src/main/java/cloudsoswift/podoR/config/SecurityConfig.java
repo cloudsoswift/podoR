@@ -4,6 +4,7 @@ import cloudsoswift.podoR.security.jwt.JwtAuthenticationFilter;
 import cloudsoswift.podoR.security.oauth.CustomOAuth2UserService;
 import cloudsoswift.podoR.security.oauth.OAuth2AuthenticationFailureHandler;
 import cloudsoswift.podoR.security.oauth.OAuth2AuthenticationSuccessHandler;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -14,13 +15,20 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -34,7 +42,8 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           OAuth2AuthorizationRequestResolver authorizationRequestResolver) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
@@ -74,6 +83,8 @@ public class SecurityConfig {
                         })
                 )
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(authorization ->
+                                authorization.authorizationRequestResolver(authorizationRequestResolver))
                         .redirectionEndpoint(redirection ->
                                 redirection.baseUri("/login/oauth2/code/*"))
                         .userInfoEndpoint(userInfo ->
@@ -85,6 +96,35 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * 이미 로그인된 소셜(Google/Kakao) 세션을 그대로 재사용하지 않고 매번 계정 선택/로그인 화면을 띄운다.
+     * Google=prompt=select_account(계정 선택), Kakao=prompt=login(로그인 화면 강제).
+     */
+    @Bean
+    public OAuth2AuthorizationRequestResolver authorizationRequestResolver(ClientRegistrationRepository repo) {
+        DefaultOAuth2AuthorizationRequestResolver delegate =
+                new DefaultOAuth2AuthorizationRequestResolver(repo, "/oauth2/authorization");
+        return new OAuth2AuthorizationRequestResolver() {
+            @Override
+            public OAuth2AuthorizationRequest resolve(HttpServletRequest request) {
+                return withPrompt(delegate.resolve(request));
+            }
+
+            @Override
+            public OAuth2AuthorizationRequest resolve(HttpServletRequest request, String clientRegistrationId) {
+                return withPrompt(delegate.resolve(request, clientRegistrationId));
+            }
+        };
+    }
+
+    private OAuth2AuthorizationRequest withPrompt(OAuth2AuthorizationRequest req) {
+        if (req == null) return null;
+        String registrationId = (String) req.getAttributes().get(OAuth2ParameterNames.REGISTRATION_ID);
+        Map<String, Object> extra = new HashMap<>(req.getAdditionalParameters());
+        extra.put("prompt", "kakao".equals(registrationId) ? "login" : "select_account");
+        return OAuth2AuthorizationRequest.from(req).additionalParameters(extra).build();
     }
 
     @Bean
