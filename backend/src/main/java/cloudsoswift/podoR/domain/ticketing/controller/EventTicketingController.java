@@ -4,6 +4,7 @@ import cloudsoswift.podoR.domain.ticketing.dto.CreateOrderRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
+import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.service.TicketingOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,10 +28,18 @@ public class EventTicketingController {
 
     @DeleteMapping("/holds")
     public ResponseEntity<Void> releaseHolds(@PathVariable String eventId,
+                                             @RequestBody HoldRequest request,
                                              Authentication authentication) {
         Long userSeq = (Long) authentication.getPrincipal();
-        ticketingOrderService.releaseHolds(userSeq);
+        ticketingOrderService.releaseHolds(eventId, userSeq, request.getEventSeatSeqs());
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/my-seat-quota")
+    public ResponseEntity<SeatQuotaResponse> mySeatQuota(@PathVariable String eventId,
+                                                         Authentication authentication) {
+        Long userSeq = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(ticketingOrderService.getMyQuota(eventId, userSeq));
     }
 
     @PostMapping("/order")

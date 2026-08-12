@@ -7,8 +7,10 @@ import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeatRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
+import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
+import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderDetailResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderSummaryResponse;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
@@ -29,6 +31,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -48,6 +51,7 @@ public class TicketingOrderService {
     private final UserRepository userRepository;
     private final SeatHoldService seatHoldService;
     private final SeatVersionGenerator seatVersionGenerator;
+    private final SeatViewSnapshotCache snapshotCache;
 
     private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
 
@@ -76,7 +80,7 @@ public class TicketingOrderService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "no seats");
         }
         Event event = findEvent(eventId);
-        enforceLimit(userSeq, event.getSeriesId(), seatSeqs.size());
+        String seriesId = event.getSeriesId();
 
         List<EventSeat> seats = eventSeatRepository.findAllById(seatSeqs);
         if (seats.size() != seatSeqs.size()
@@ -84,18 +88,37 @@ public class TicketingOrderService {
                 || seats.stream().anyMatch(s -> s.getStatus() != SeatStatus.AVAILABLE)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "일부 좌석을 예매할 수 없습니다.");
         }
-        seatHoldService.releaseAll(userSeq);
-        List<Long> conflicts = seatHoldService.tryHoldAll(userSeq, seatSeqs);
+        // 이미 본인이 잡은 좌석은 새 요청분에서 제외(중복 집계 방지)
+        int alreadyOwned = seatHoldService.ownedAmong(userSeq, seriesId, seatSeqs).size();
+        int requestedNew = seatSeqs.size() - alreadyOwned;
+        enforceLimit(userSeq, seriesId, requestedNew, true);
+
+        List<Long> conflicts = seatHoldService.tryHoldAll(userSeq, seriesId, seatSeqs);
         if (!conflicts.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 선점된 좌석: " + conflicts);
         }
         return new HoldResponse(seatSeqs, LocalDateTime.now().plusMinutes(5));
     }
 
-    /** 결제창 이탈 시: 이 사용자 선점 전체 해제. */
+    /** 결제창 이탈 시: 지정 좌석 선점 해제. */
     @Transactional(readOnly = true)
-    public void releaseHolds(Long userSeq) {
-        seatHoldService.releaseAll(userSeq);
+    public void releaseHolds(String eventId, Long userSeq, List<Long> seatSeqs) {
+        if (seatSeqs == null || seatSeqs.isEmpty()) return;
+        Event event = findEvent(eventId);
+        seatHoldService.release(userSeq, event.getSeriesId(), seatSeqs);
+    }
+
+    /** 좌석 페이지 카운터용: 이 시리즈에서 내가 쓴 좌석수(paid+held)와 1인 한도. */
+    public SeatQuotaResponse getMyQuota(String eventId, Long userSeq) {
+        Event event = findEvent(eventId);
+        String seriesId = event.getSeriesId();
+        int max = eventSeriesRepository.findBySeriesId(seriesId)
+                .map(cloudsoswift.podoR.domain.event.entity.EventSeries::getMaxSeatsPerPerson)
+                .filter(Objects::nonNull)
+                .orElse(DEFAULT_MAX_SEATS_PER_PERSON);
+        long paid = ticketingItemRepository.countPaidSeatsInSeries(userSeq, seriesId);
+        int held = seatHoldService.heldCountInSeries(userSeq, seriesId);
+        return new SeatQuotaResponse(paid + held, max);
     }
 
     /** 결제 확정: hold 재검증 → 좌석 SOLD + 주문/결제 생성. */
@@ -108,7 +131,7 @@ public class TicketingOrderService {
         if (!seatHoldService.ownsAll(userSeq, seatSeqs)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "선점이 만료되었거나 유효하지 않습니다.");
         }
-        enforceLimit(userSeq, event.getSeriesId(), seatSeqs.size());
+        enforceLimit(userSeq, event.getSeriesId(), seatSeqs.size(), false);
 
         List<EventSeat> seats = eventSeatRepository.findAllById(seatSeqs);
         if (seats.size() != seatSeqs.size()) {
@@ -138,7 +161,8 @@ public class TicketingOrderService {
         paymentRepository.save(Payment.builder()
                 .ticketingOrder(order).method(method != null ? method : "MOCK").amount((long) total).build());
 
-        seatHoldService.release(userSeq, seatSeqs);
+        seatHoldService.release(userSeq, event.getSeriesId(), seatSeqs);
+        snapshotCache.evict(eventId);
         return new OrderCreatedResponse(order.getOrderNumber());
     }
 
@@ -157,13 +181,17 @@ public class TicketingOrderService {
                 SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
         order.cancel();
         paymentRepository.findByTicketingOrder_Seq(order.getSeq()).ifPresent(Payment::cancel);
+        snapshotCache.evict(order.getEvent().getEventId());
     }
 
-    private void enforceLimit(Long userSeq, String seriesId, int requested) {
+    private void enforceLimit(Long userSeq, String seriesId, int requested, boolean includeHeld) {
         int max = eventSeriesRepository.findBySeriesId(seriesId)
-                .map(s -> s.getMaxSeatsPerPerson()).orElse(DEFAULT_MAX_SEATS_PER_PERSON);
+                .map(cloudsoswift.podoR.domain.event.entity.EventSeries::getMaxSeatsPerPerson)
+                .filter(Objects::nonNull)
+                .orElse(DEFAULT_MAX_SEATS_PER_PERSON);
         long paid = ticketingItemRepository.countPaidSeatsInSeries(userSeq, seriesId);
-        if (paid + requested > max) {
+        int held = includeHeld ? seatHoldService.heldCountInSeries(userSeq, seriesId) : 0;
+        if (paid + held + requested > max) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "이 공연은 1인 최대 " + max + "석까지 예매할 수 있습니다.");
         }
