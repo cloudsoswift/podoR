@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { EventItem, EventUpdatePayload } from "@/lib/api/events";
-import { listVenues, Venue } from "@/lib/api/venues";
 
 interface EventFormModalProps {
   open: boolean;
@@ -27,26 +26,40 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
   const [eventDate, setEventDate] = useState("");
   const [ticketingDate, setTicketingDate] = useState("");
   const [venueSeq, setVenueSeq] = useState<number | "">("");
+  const [venueName, setVenueName] = useState("");
   const [maxSeatsPerPerson, setMaxSeatsPerPerson] = useState<number>(4);
-  const [venues, setVenues] = useState<Venue[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    // 수정이면 기존 값으로, 생성이면 빈 폼으로 초기화
+    // 모달 open/대상 변경 시 폼 필드 초기화(의도된 패턴): 수정이면 기존 값, 생성이면 빈 폼
+    /* eslint-disable react-hooks/set-state-in-effect */
     setTitle(event?.title ?? "");
     setContent(event?.content ?? "");
     setEventType(event?.eventType ?? "");
     setEventDate(event ? toLocalInput(event.eventDate) : "");
     setTicketingDate(event ? toLocalInput(event.ticketingDate) : "");
     setVenueSeq(event?.venueSeq ?? "");
+    setVenueName(event?.venueName ?? "");
     setMaxSeatsPerPerson(event?.maxSeatsPerPerson ?? 4);
     setError(null);
-    listVenues({ page: 0, size: 200 })
-      .then((d) => setVenues(d.content))
-      .catch(() => setVenues([]));
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, event]);
+
+  // 공연장 검색 새 창에서 선택 결과 수신
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (d && d.type === "venue-picked" && typeof d.seq === "number") {
+        setVenueSeq(d.seq);
+        setVenueName(typeof d.name === "string" ? d.name : "");
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   if (!open) return null;
 
@@ -99,18 +112,20 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-600">공연장 *</label>
-            <select
-              className={field}
-              value={venueSeq}
-              onChange={(e) => setVenueSeq(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">선택하세요</option>
-              {venues.map((v) => (
-                <option key={v.seq} value={v.seq}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <span className={`${field} flex-1 ${venueSeq === "" ? "text-gray-400" : ""}`}>
+                {venueSeq === "" ? "선택되지 않음" : venueName || `#${venueSeq}`}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  window.open("/admin/venues/search", "venue-search", "width=520,height=640")
+                }
+                className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                검색
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
