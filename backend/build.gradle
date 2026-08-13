@@ -49,6 +49,10 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-webflux-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// Testcontainers 코어만 사용(버전은 Spring Boot 4 BOM 관리). 컨테이너 수명은 테스트에서 수동 관리.
+	testImplementation 'org.testcontainers:testcontainers'
+	// @DataJpaTest 용 H2(테스트 application.yml 이 PostgreSQL 호환 모드로 설정). 버전은 Boot BOM 관리.
+	testRuntimeOnly 'com.h2database:h2'
 	    // JWT 라이브러리 (0.11.5 버전 사용)
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
