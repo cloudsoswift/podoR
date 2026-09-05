@@ -19,8 +19,11 @@ export default function MyPage() {
 
   useEffect(() => {
     let active = true;
+    // 데이터 페칭 이펙트(의도된 패턴): 조회 조건이 바뀔 때 로딩/에러 상태를 초기화하고 API 와 동기화한다
+    /* eslint-disable react-hooks/set-state-in-effect */
     setLoading(true);
     setError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     listMyTickets({ dateBasis, year, month })
       .then((d) => {
         if (active) setTickets(d);

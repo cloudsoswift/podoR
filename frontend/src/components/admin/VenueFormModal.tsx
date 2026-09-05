@@ -24,6 +24,8 @@ export default function VenueFormModal({ open, initial, onSubmit, onCancel }: Ve
 
   useEffect(() => {
     if (open) {
+      // 모달 open/대상 변경 시 폼 필드 초기화(의도된 패턴): 수정이면 기존 값, 생성이면 빈 폼
+      /* eslint-disable react-hooks/set-state-in-effect */
       setForm(
         initial
           ? {
@@ -35,6 +37,7 @@ export default function VenueFormModal({ open, initial, onSubmit, onCancel }: Ve
           : emptyForm
       );
       setError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, initial]);
 
