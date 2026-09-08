@@ -162,6 +162,11 @@ export const handlers = [
     return HttpResponse.json(venue);
   }),
 
+  // 티켓팅 - 내 좌석 quota (이 시리즈에서 쓴 좌석수 / 1인 최대)
+  http.get(`${BASE_URL}/events/:eventId/my-seat-quota`, () => {
+    return HttpResponse.json({ used: 0, max: 4 });
+  }),
+
   // 공연장의 이벤트 목록 (최신순)
   http.get(`${BASE_URL}/venues/:venueId/events`, ({ params }) => {
     const events = mockEvents
