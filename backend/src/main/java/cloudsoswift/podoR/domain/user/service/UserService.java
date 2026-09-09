@@ -33,6 +33,14 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
+    /**
+     * 인증 경로용 조회. 존재하지 않거나 탈퇴한 사용자면 비어 있는 Optional 을 돌려준다.
+     * 토큰 재발급처럼 "탈퇴한 사용자에게 새 권한을 주면 안 되는" 곳에서 사용한다.
+     */
+    public java.util.Optional<User> findActiveBySeq(Long userSeq) {
+        return userRepository.findBySeqAndDeletedAtIsNull(userSeq);
+    }
+
     // ===== Admin =====
 
     public Page<AdminUserListResponse> getUsers(String keyword, Pageable pageable) {
