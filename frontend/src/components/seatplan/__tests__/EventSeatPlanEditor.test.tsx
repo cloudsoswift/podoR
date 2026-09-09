@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
+import { BASE_URL } from "@/mocks/handlers";
 import EventSeatPlanEditor from "../EventSeatPlanEditor";
 import { SeatPlanResponse, SeatPlanPayload } from "@/lib/api/seatPlan";
 
@@ -15,7 +16,7 @@ const initialPlan: SeatPlanResponse = {
 
 beforeEach(() => {
   server.use(
-    http.get("http://localhost:8080/venues/1/layout", () =>
+    http.get(`${BASE_URL}/venues/1/layout`, () =>
       HttpResponse.json({ layoutJson: null }),
     ),
   );
@@ -35,7 +36,7 @@ test("저장 시 가격은 콤마 없는 숫자로 전송된다", async () => {
   const user = userEvent.setup();
   let sent: SeatPlanPayload | undefined;
   server.use(
-    http.put("http://localhost:8080/events/E1/seat-plan", async ({ request }) => {
+    http.put(`${BASE_URL}/events/E1/seat-plan`, async ({ request }) => {
       sent = (await request.json()) as SeatPlanPayload;
       return new HttpResponse(null, { status: 204 });
     }),

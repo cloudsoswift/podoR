@@ -3,7 +3,10 @@ import { http, HttpResponse } from "msw";
 // apiClient(baseURL)와 동일하게 맞춰야 요청이 매칭됨.
 // MSW는 상대경로를 location.origin(:3000)에 붙여 해석하므로,
 // :8080으로 나가는 apiClient 요청을 잡으려면 절대 URL prefix가 필요하다.
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// apiClient(baseURL)와 반드시 동일해야 요청이 매칭된다.
+// 테스트에서도 이 값을 import 해서 쓸 것 — URL 을 하드코딩하면 baseURL 변경(예: /api 추가)을
+// 테스트가 못 잡고, 오히려 테스트만 깨진다.
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const mockUser = {
   email: "test@test.com",

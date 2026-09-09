@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
+import { BASE_URL } from "@/mocks/handlers";
 import { listVenues } from "@/lib/api/venues";
 
 /**
@@ -15,7 +16,7 @@ test("RTL 렌더와 jest-dom 매처가 동작한다", () => {
 
 test("MSW 가 axios 요청을 가로챈다", async () => {
   server.use(
-    http.get("http://localhost:8080/venues", () =>
+    http.get(`${BASE_URL}/venues`, () =>
       HttpResponse.json({
         content: [
           { seq: 1, name: "V", address: "A", description: null, venueImage: null, createdAt: "", updatedAt: "" },
