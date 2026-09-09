@@ -82,6 +82,23 @@ class EventTicketingControllerTest {
                 .andExpect(status().isConflict());
     }
 
+    /**
+     * 실패 사유가 응답에 실려야 클라이언트가 "왜 409 인지"를 사용자에게 보여줄 수 있다.
+     * (ProblemDetail 비활성 상태에서는 사유가 잘려나가 모든 409 가 구분 불가능했다.)
+     */
+    @Test
+    void hold_실패_사유가_ProblemDetail_detail_로_전달된다() throws Exception {
+        when(service.hold(anyString(), anyLong(), anyList()))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT, "이 공연은 1인 최대 4석까지 예매할 수 있습니다."));
+
+        mvc.perform(post("/events/EVT1/holds").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"eventSeatSeqs\":[1]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("이 공연은 1인 최대 4석까지 예매할 수 있습니다."));
+    }
+
     @Test
     void releaseHolds_바디의_좌석으로_해제_204() throws Exception {
         mvc.perform(delete("/events/EVT1/holds").principal(AUTH)
