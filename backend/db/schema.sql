@@ -126,6 +126,21 @@ CREATE TABLE event (
 COMMENT ON COLUMN event.event_id      IS 'UUID 형태의 이벤트 식별자';
 COMMENT ON COLUMN event.series_id     IS '같은 공연의 여러 회차를 묶는 그룹키';
 COMMENT ON COLUMN event.stream_status IS 'SCHEDULED, LIVE, ENDED';
+
+-- ---------------------------------------------------------------------
+-- event_series (공연 시리즈 단위 설정 — 1인 최대 예매 좌석수)
+--   event.series_id 와 논리적으로 연결되지만, 회차가 없는 시리즈도 존재할 수 있어
+--   FK 는 두지 않는다(엔티티도 연관관계 없이 series_id 로만 조회한다).
+-- ---------------------------------------------------------------------
+CREATE TABLE event_series (
+    seq                  bigserial    NOT NULL,
+    series_id            varchar(255) NOT NULL,
+    max_seats_per_person integer      NOT NULL,
+    CONSTRAINT "PK_EVENT_SERIES" PRIMARY KEY (seq),
+    CONSTRAINT uk_event_series_series_id UNIQUE (series_id)
+);
+COMMENT ON COLUMN event_series.series_id            IS 'event.series_id 와 동일한 그룹키';
+COMMENT ON COLUMN event_series.max_seats_per_person IS '이 시리즈에서 1인이 예매 가능한 최대 좌석수';
 CREATE INDEX idx_event_host ON event (host_seq);
 
 -- ---------------------------------------------------------------------
@@ -192,7 +207,8 @@ CREATE TABLE ticketing_item (
 );
 
 -- ---------------------------------------------------------------------
--- payment (결제 — Phase 2. 현재 대응 BE 엔티티 없음, DB 구조 보존용)
+-- payment (결제 — Phase 2. Payment 엔티티와 1:1 대응)
+--   pg_* / discount_* 는 실제 PG 연동 대비 컬럼으로, 현재 엔티티는 사용하지 않는다.
 -- ---------------------------------------------------------------------
 CREATE TABLE payment (
     seq                 bigserial   NOT NULL,
@@ -204,7 +220,9 @@ CREATE TABLE payment (
     payment_status      varchar(50) NOT NULL,
     discount_type       varchar(50),
     discount_amount     bigint,
+    paid_at             timestamp,
+    cancelled_at        timestamp,
     CONSTRAINT "PK_PAYMENT" PRIMARY KEY (seq),
     CONSTRAINT "FK_ticketing_order_TO_payment_1" FOREIGN KEY (ticketing_order_seq) REFERENCES ticketing_order(seq)
 );
-COMMENT ON COLUMN payment.payment_status IS 'PENDING, IN_PROGRESS, COMPLETED, FAILED, CANCELLED';
+COMMENT ON COLUMN payment.payment_status IS 'COMPLETED, CANCELLED';
