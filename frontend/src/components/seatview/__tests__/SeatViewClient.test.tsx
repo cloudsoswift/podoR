@@ -112,6 +112,30 @@ test("선점에 성공하면 선택을 비워 결제 바에 갇히지 않는다"
   await waitFor(() => expect(screen.queryByText("선택 1석")).not.toBeInTheDocument());
 });
 
+test("선점 실패 시 서버가 보낸 사유를 그대로 안내한다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+  server.use(
+    http.post(`${BASE_URL}/events/E1/holds`, () =>
+      HttpResponse.json(
+        { status: 409, title: "Conflict", detail: "이 공연은 1인 최대 4석까지 예매할 수 있습니다." },
+        { status: 409 },
+      ),
+    ),
+  );
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+  await user.click(screen.getByTitle(/^A1 ·/));
+  await user.click(screen.getByRole("button", { name: "결제하기" }));
+
+  await waitFor(() =>
+    expect(window.alert).toHaveBeenCalledWith("이 공연은 1인 최대 4석까지 예매할 수 있습니다."),
+  );
+});
+
 test("선점 요청 중에는 결제하기가 중복 호출되지 않는다", async () => {
   const user = userEvent.setup();
   setupPolling();

@@ -1,4 +1,15 @@
 import apiClient from "@/lib/axios";
+import { AxiosError } from "axios";
+
+/**
+ * 서버가 보낸 실패 사유를 꺼낸다.
+ * 백엔드는 RFC 7807(ProblemDetail)로 응답하므로 ResponseStatusException 의 사유가 `detail` 에 담긴다.
+ * (예: "이 공연은 1인 최대 4석까지 예매할 수 있습니다.")
+ */
+export function errorDetail(error: unknown, fallback: string): string {
+  const detail = (error as AxiosError<{ detail?: string }>)?.response?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+}
 
 export interface HoldResponse {
   heldSeats: number[];

@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSeatViewPolling } from "./useSeatViewPolling";
 import { parseSeatmapDoc } from "@/components/seatmap/seatmapApi";
-import { holdSeats, getMySeatQuota } from "@/lib/api/ticketing";
+import { holdSeats, getMySeatQuota, errorDetail } from "@/lib/api/ticketing";
 
 /**
  * Section Viewer(섹션 미선택) ↔ SeatMap Viewer(섹션 선택)를 한 화면에서 오간다.
@@ -71,8 +71,9 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
       // (결제 페이지는 URL 쿼리로 좌석을 받으므로 흐름에는 영향 없다.)
       setSelected(new Set());
       router.push(`/events/${eventId}/seats/payment?seats=${seqs.join(",")}`);
-    } catch {
-      alert("선택한 좌석 중 일부를 예매할 수 없습니다. 좌석 현황을 다시 확인해주세요.");
+    } catch (e) {
+      // 서버가 보낸 실제 사유(한도 초과 / 이미 선점됨 등)를 그대로 보여준다.
+      alert(errorDetail(e, "선택한 좌석 중 일부를 예매할 수 없습니다. 좌석 현황을 다시 확인해주세요."));
       setSelected(new Set());
       loadQuota();
     } finally {

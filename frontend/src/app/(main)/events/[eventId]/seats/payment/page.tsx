@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createOrder, releaseHolds } from "@/lib/api/ticketing";
+import { createOrder, releaseHolds, errorDetail } from "@/lib/api/ticketing";
 
 export default function PaymentPage({
   params,
@@ -47,8 +47,8 @@ export default function PaymentPage({
       const { orderNumber } = await createOrder(eventId, seatSeqs);
       setDone(true);
       router.replace(`/order/${orderNumber}/complete`);
-    } catch {
-      alert("결제에 실패했습니다. 선점이 만료되었을 수 있어요. 좌석을 다시 선택해주세요.");
+    } catch (e) {
+      alert(errorDetail(e, "결제에 실패했습니다. 선점이 만료되었을 수 있어요. 좌석을 다시 선택해주세요."));
       router.replace(`/events/${eventId}/seats`);
     }
   }
