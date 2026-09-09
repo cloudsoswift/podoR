@@ -1,7 +1,8 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
+import { BASE_URL } from "@/mocks/handlers";
 import { SeatViewSeat } from "@/lib/api/seatview";
 import SeatViewClient from "../SeatViewClient";
 import { useSeatViewPolling } from "../useSeatViewPolling";
@@ -38,7 +39,7 @@ function setupPolling(refresh = jest.fn()) {
 /** my-seat-quota 응답 지정. */
 function stubQuota(used: number, max: number) {
   server.use(
-    http.get("http://localhost:8080/events/E1/my-seat-quota", () =>
+    http.get(`${BASE_URL}/events/E1/my-seat-quota`, () =>
       HttpResponse.json({ used, max }),
     ),
   );
@@ -87,6 +88,54 @@ test("남은 할당량을 초과하면 좌석이 더 선택되지 않고 안내�
   await user.click(screen.getByTitle(/^A2 ·/));
   expect(window.alert).toHaveBeenCalledWith("이 공연은 1인 최대 4석까지 예매할 수 있습니다.");
   expect(screen.getByText("선택 1석")).toBeInTheDocument();
+});
+
+test("선점에 성공하면 선택을 비워 결제 바에 갇히지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+  server.use(
+    http.post(`${BASE_URL}/events/E1/holds`, () =>
+      HttpResponse.json({ heldSeats: [1], expiresAt: "2026-01-01T00:00:00" }),
+    ),
+  );
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+  await user.click(screen.getByTitle(/^A1 ·/));
+  expect(screen.getByText("선택 1석")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "결제하기" }));
+
+  // 선점된 좌석은 클릭 불가가 되므로, 선택이 남아 있으면 해제할 방법이 없다.
+  await waitFor(() => expect(screen.queryByText("선택 1석")).not.toBeInTheDocument());
+});
+
+test("선점 요청 중에는 결제하기가 중복 호출되지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+  let holdCalls = 0;
+  server.use(
+    http.post(`${BASE_URL}/events/E1/holds`, async () => {
+      holdCalls += 1;
+      await delay(50); // 진행 중 상태를 만들기 위해 지연
+      return HttpResponse.json({ heldSeats: [1], expiresAt: "2026-01-01T00:00:00" });
+    }),
+  );
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+  await user.click(screen.getByTitle(/^A1 ·/));
+
+  const pay = screen.getByRole("button", { name: "결제하기" });
+  await user.click(pay);
+  // 진행 중에는 비활성이라 추가 클릭이 먹지 않는다
+  expect(screen.getByRole("button", { name: "처리 중…" })).toBeDisabled();
+
+  await waitFor(() => expect(holdCalls).toBe(1));
 });
 
 test("새로고침 버튼은 쿨다운 동안 비활성이고 연타를 무시한다", async () => {

@@ -17,6 +17,7 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quota, setQuota] = useState<{ used: number; max: number } | null>(null);
   const [cooling, setCooling] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
   const { seats, layoutJson, heldSeats, loading, refresh } = useSeatViewPolling(eventId, section);
 
   const loadQuota = useCallback(() => {
@@ -61,14 +62,21 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
 
   async function handleCheckout() {
     const seqs = [...selected];
-    if (seqs.length === 0) return;
+    if (seqs.length === 0 || checkingOut) return; // 연타로 중복 선점/이동하지 않도록
+    setCheckingOut(true);
     try {
       await holdSeats(eventId, seqs);
+      // 선점되면 그 좌석은 클릭 불가(held)가 되어 선택 해제도 못 한다.
+      // 선택을 비워 "결제 바만 남고 빠져나올 수 없는" 상태를 막는다.
+      // (결제 페이지는 URL 쿼리로 좌석을 받으므로 흐름에는 영향 없다.)
+      setSelected(new Set());
       router.push(`/events/${eventId}/seats/payment?seats=${seqs.join(",")}`);
     } catch {
       alert("선택한 좌석 중 일부를 예매할 수 없습니다. 좌석 현황을 다시 확인해주세요.");
       setSelected(new Set());
       loadQuota();
+    } finally {
+      setCheckingOut(false);
     }
   }
 
@@ -87,18 +95,20 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
           <span className="text-sm text-gray-700">선택 {selected.size}석</span>
           <button
             onClick={handleCheckout}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            disabled={checkingOut}
+            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            결제하기
+            {checkingOut ? "처리 중…" : "결제하기"}
           </button>
         </div>
       </div>
     ) : null;
 
+  // 페이지 흐름 안에 배치한다. fixed 로 띄우면 sticky 헤더(z-50, 불투명)에 가려진다.
   const quotaBadge = quota ? (
-    <div className="fixed right-3 top-3 z-40 rounded-full border border-gray-200 bg-white/90 px-3 py-1 text-xs font-medium text-gray-700 shadow-sm">
+    <span className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm">
       현재 {quota.used} / {quota.max}
-    </div>
+    </span>
   ) : null;
 
   if (loading) {
@@ -108,8 +118,10 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
   if (!section) {
     return (
       <div className="p-4 pb-20">
-        {quotaBadge}
-        <h2 className="mb-3 text-lg font-bold text-gray-900">섹션 선택</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-gray-900">섹션 선택</h2>
+          {quotaBadge}
+        </div>
         <div className="flex flex-wrap gap-2">
           {doc.sections.map((sec) => {
             const agg = bySection.get(sec.name) ?? { total: 0, available: 0 };
@@ -147,18 +159,20 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
 
   return (
     <div className="p-4 pb-20">
-      {quotaBadge}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <button onClick={() => setSection(undefined)} className="text-sm text-indigo-600 hover:underline">
           ← 전체 섹션
         </button>
-        <button
-          onClick={handleRefresh}
-          disabled={cooling}
-          className="rounded-lg border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        >
-          {cooling ? "새로고침 대기…" : "새로고침"}
-        </button>
+        <div className="flex items-center gap-2">
+          {quotaBadge}
+          <button
+            onClick={handleRefresh}
+            disabled={cooling}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          >
+            {cooling ? "새로고침 대기…" : "새로고침"}
+          </button>
+        </div>
       </div>
       <h2 className="mb-3 text-lg font-bold text-gray-900">{section}</h2>
       <div className="flex flex-wrap gap-1">

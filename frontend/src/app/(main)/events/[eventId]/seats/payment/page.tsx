@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createOrder, releaseHolds } from "@/lib/api/ticketing";
 
@@ -17,15 +17,26 @@ export default function PaymentPage({
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(false);
 
+  // 언마운트 해제를 잠시 미뤄두는 타이머. StrictMode(개발)의 mount→cleanup→mount 재실행에서
+  // cleanup 이 즉시 돌아 "방금 잡은 선점"이 해제되는 것을 막는다.
+  // 실제 이탈이면 재마운트가 없으므로 타이머가 그대로 실행된다.
+  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // 결제 완료 없이 이탈하면 선점 해제
   useEffect(() => {
+    if (releaseTimer.current) {
+      clearTimeout(releaseTimer.current); // 재마운트 → 예약된 해제 취소
+      releaseTimer.current = null;
+    }
+
     const release = () => {
       if (!done && seatSeqs.length > 0) releaseHolds(eventId, seatSeqs).catch(() => {});
     };
-    window.addEventListener("beforeunload", release);
+    window.addEventListener("beforeunload", release); // 브라우저 종료/새로고침은 즉시 해제
+
     return () => {
       window.removeEventListener("beforeunload", release);
-      release();
+      releaseTimer.current = setTimeout(release, 100);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, done, seatsParam]);
