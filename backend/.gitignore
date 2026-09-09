@@ -35,3 +35,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### 비밀 설정 (private submodule 에서 copyPrivate 로 복사되는 산출물) ###
+# 실제 client-secret · DB 비밀번호 · JWT secret 이 들어 있으므로 절대 커밋 금지.
+# 원본은 backend/podoR-config (별도 private 저장소)에서 관리한다.
+src/main/resources/application.yml
+src/test/resources/application.yml
