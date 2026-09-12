@@ -61,6 +61,11 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// SchemaSqlDriftTest 가 이 파일을 검증한다. 입력으로 선언하지 않으면 스크립트만 고쳤을 때
+	// Gradle 이 test 를 up-to-date 로 판단해 건너뛰고, 드리프트를 놓친다.
+	inputs.file('db/schema.sql')
+		.withPropertyName('schemaSql')
+		.withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 tasks.register('copyPrivate') {
