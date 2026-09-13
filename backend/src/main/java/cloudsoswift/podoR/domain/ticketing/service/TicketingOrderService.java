@@ -7,6 +7,7 @@ import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeatRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
+import cloudsoswift.podoR.domain.queue.WaitingQueueService;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
@@ -52,6 +53,7 @@ public class TicketingOrderService {
     private final SeatHoldService seatHoldService;
     private final SeatVersionGenerator seatVersionGenerator;
     private final SeatViewSnapshotCache snapshotCache;
+    private final WaitingQueueService waitingQueue;
 
     private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
 
@@ -163,6 +165,10 @@ public class TicketingOrderService {
 
         seatHoldService.release(userSeq, event.getSeriesId(), seatSeqs);
         snapshotCache.evict(eventId);
+        // 주문이 끝났으면 대기열 슬롯을 즉시 반납한다. 입장권 TTL 이 남았다고 붙들고 있으면
+        // 그만큼 뒷사람의 입장이 늦어진다. (추가 구매는 다시 줄을 서야 하지만,
+        // 1인 한도가 수량을 통제하므로 한 번에 골라 담으면 된다.)
+        waitingQueue.leave(eventId, userSeq);
         return new OrderCreatedResponse(order.getOrderNumber());
     }
 

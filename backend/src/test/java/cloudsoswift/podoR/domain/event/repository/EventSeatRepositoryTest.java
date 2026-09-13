@@ -20,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+// 위 `replace` 옵션을 주어야 AutoConfigure 된 H2 DB가 아닌,
+// `application.yml`로 설정한 내용이 반영된 H2 DB를 사용     
 class EventSeatRepositoryTest {
 
     @Autowired TestEntityManager em;

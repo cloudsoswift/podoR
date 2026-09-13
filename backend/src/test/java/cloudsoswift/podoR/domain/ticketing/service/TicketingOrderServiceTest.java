@@ -8,6 +8,7 @@ import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeatRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
+import cloudsoswift.podoR.domain.queue.WaitingQueueService;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.hold.SeatHoldService;
@@ -43,6 +44,7 @@ class TicketingOrderServiceTest {
     @Mock SeatHoldService seatHoldService;
     @Mock SeatVersionGenerator seatVersionGenerator;
     @Mock SeatViewSnapshotCache snapshotCache;
+    @Mock WaitingQueueService waitingQueue;
 
     @InjectMocks TicketingOrderService service;
 
@@ -171,7 +173,7 @@ class TicketingOrderServiceTest {
     }
 
     @Test
-    void confirmOrder_성공시_좌석SOLD전이_release_그리고_캐시evict() {
+    void confirmOrder_성공시_좌석SOLD전이_release_캐시evict_그리고_대기열_슬롯반납() {
         Event event = mockEvent();
         when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
         List<Long> seats = List.of(1L, 2L);
@@ -193,6 +195,8 @@ class TicketingOrderServiceTest {
         verify(paymentRepository).save(any());
         verify(seatHoldService).release(USER, SERIES, seats);
         verify(snapshotCache).evict(EVENT_ID);
+        // 볼일이 끝났으니 자리를 즉시 비운다 — TTL 만큼 붙들고 있으면 순환이 느려진다
+        verify(waitingQueue).leave(EVENT_ID, USER);
     }
 
     @Test
@@ -213,6 +217,7 @@ class TicketingOrderServiceTest {
                 .isInstanceOf(ResponseStatusException.class);
         verify(ticketingOrderRepository, never()).save(any());
         verify(snapshotCache, never()).evict(anyString());
+        verify(waitingQueue, never()).leave(anyString(), anyLong()); // 실패했으면 자리를 유지한다
     }
 
     @Test
