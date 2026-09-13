@@ -52,12 +52,12 @@ public class SecurityConfig {
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()
                         .requestMatchers("/oauth2/**").permitAll()
                         // 소비자 조회(GET)만 공개 — 쓰기/관리자/`/users/**` 는 보호 유지
+                        // 좌석맵(seat-view)은 대기열 도입으로 로그인 필요로 전환되어 여기서 제외했다.
+                        // 이벤트 목록·상세는 공개로 남긴다 — 비로그인도 공연 정보는 볼 수 있어야 한다.
                         .requestMatchers(HttpMethod.GET,
                                 "/events/series-summary",
                                 "/events/series/*",
                                 "/events/*",
-                                "/events/*/seat-view",
-                                "/events/*/seat-view/changes",
                                 "/venues",
                                 "/venues/*",
                                 "/venues/*/layout",

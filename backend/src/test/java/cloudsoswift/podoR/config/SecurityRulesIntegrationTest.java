@@ -57,7 +57,15 @@ class SecurityRulesIntegrationTest {
     @Test
     void 인증된_사용자는_보호된_엔드포인트를_통과한다() throws Exception {
         // 인가를 통과해 컨트롤러까지 도달하면, 없는 이벤트이므로 404 가 된다(401 이 아니다).
-        mvc.perform(get("/events/NO-SUCH-EVENT/my-seat-quota")
+        //
+        // 대기열 엔드포인트를 고른 이유 두 가지:
+        //  1) 입장권 게이트 대상이 아니다(입장권을 받으러 오는 곳이므로). 게이트가 걸린 경로면
+        //     인터셉터가 컨트롤러 앞에서 끊어버려 이 테스트가 보려는 404 를 볼 수 없다.
+        //  2) 없는 이벤트라서 Redis 에 닿지 않는다. TicketingQueueService 가 findEvent() 를 먼저
+        //     해서 404 를 던지고, waitingQueue 는 호출하지 않는다.
+        //
+        // 두 조건은 별개다. 실재하는 이벤트로 부르면 게이트 대상이 아니어도 Redis 를 쓴다.
+        mvc.perform(post("/events/NO-SUCH-EVENT/queue")
                         .with(org.springframework.security.test.web.servlet.request
                                 .SecurityMockMvcRequestPostProcessors.authentication(user(100L))))
                 .andExpect(status().isNotFound());

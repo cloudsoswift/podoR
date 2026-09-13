@@ -33,8 +33,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(value = EventTicketingController.class,
+        // @WebMvcTest 는 WebMvcConfigurer 와 HandlerInterceptor 를 자동으로 끌어온다.
+        // 둘 다 제외하지 않으면 WaitingQueueService 빈이 없어 컨텍스트가 뜨지 않는다.
+        // (게이트 동작 자체는 QueuePassInterceptorTest 소관이다.)
         excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
-                classes = {SecurityConfig.class, JwtAuthenticationFilter.class}),
+                classes = {SecurityConfig.class, JwtAuthenticationFilter.class,
+                        cloudsoswift.podoR.config.WebMvcConfig.class,
+                        cloudsoswift.podoR.config.QueuePassInterceptor.class}),
         excludeAutoConfiguration = {OAuth2ClientAutoConfiguration.class,
                 OAuth2ClientWebSecurityAutoConfiguration.class})
 @AutoConfigureMockMvc(addFilters = false)
