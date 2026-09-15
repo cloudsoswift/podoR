@@ -1,9 +1,8 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
+import SessionList from "@/components/event/SessionList";
 import { EventItem, getEvent, listSessions } from "@/lib/api/events";
-import { formatDateTime } from "@/lib/format";
 import { pushRecentEvent } from "@/lib/recentEvents";
 
 export default function EventDetailPage({
@@ -49,19 +48,7 @@ export default function EventDetailPage({
 
       <div>
         <h2 className="mb-2 text-lg font-bold text-gray-900">회차 선택</h2>
-        <div className="space-y-2">
-          {sessions.map((s) => (
-            <Link
-              key={s.eventId}
-              href={`/events/${s.eventId}/seats`}
-              className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-indigo-300"
-            >
-              <span className="text-sm font-medium text-gray-800">{formatDateTime(s.eventDate)}</span>
-              <span className="text-sm text-indigo-600">좌석 보기 →</span>
-            </Link>
-          ))}
-          {sessions.length === 0 && <p className="text-sm text-gray-400">회차 정보가 없습니다.</p>}
-        </div>
+        <SessionList sessions={sessions} />
       </div>
     </div>
   );
