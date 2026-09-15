@@ -53,12 +53,16 @@ public class OAuth2AuthenticationSuccessHandler
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
-        // 프론트엔드로 리다이렉트 (토큰 전달)
-        String targetUrl = UriComponentsBuilder
+        // 프론트엔드로 리다이렉트 (토큰 전달). 로그인 전에 있던 페이지가 있으면 함께 넘긴다.
+        UriComponentsBuilder target = UriComponentsBuilder
                 .fromUriString(frontendURL + "/oauth2/redirect")
-                .queryParam("accessToken", accessToken)
-                .build()
-                .toUriString();
+                .queryParam("accessToken", accessToken);
+        String redirect = RedirectPaths.consume(request);
+        if (redirect != null) {
+            target.queryParam(RedirectPaths.PARAMETER, redirect);
+        }
+        // encode(): redirect 안의 & = 를 인코딩해 다른 파라미터를 주입할 수 없게 한다.
+        String targetUrl = target.build().encode().toUriString();
 
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }

@@ -26,11 +26,16 @@ public class OAuth2AuthenticationFailureHandler
             HttpServletResponse response,
             AuthenticationException exception) throws IOException {
 
-        String targetUrl = UriComponentsBuilder
+        UriComponentsBuilder target = UriComponentsBuilder
                 .fromUriString(frontendURL + "/login")
-                .queryParam("error", exception.getLocalizedMessage())
-                .build()
-                .toUriString();
+                .queryParam("error", exception.getLocalizedMessage());
+        // 다시 로그인해도 원래 목적지로 돌아가도록 유지한다.
+        String redirect = RedirectPaths.consume(request);
+        if (redirect != null) {
+            target.queryParam(RedirectPaths.PARAMETER, redirect);
+        }
+        // error 에 공백·한글이 들어갈 수 있으므로 인코딩한다.
+        String targetUrl = target.build().encode().toUriString();
 
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }

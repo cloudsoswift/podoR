@@ -16,7 +16,11 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,5 +78,37 @@ class OAuth2AuthenticationSuccessHandlerTest {
 
         assertThat(response.getRedirectedUrl())
                 .isEqualTo("https://front.example/oauth2/redirect?accessToken=AT");
+    }
+
+    @Test
+    void 세션에_보관된_redirect_를_함께_돌려주고_세션에서_지운다() throws Exception {
+        when(jwtTokenProvider.generateAccessToken(authentication)).thenReturn("AT");
+        when(jwtTokenProvider.generateRefreshToken(42L)).thenReturn("RT");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(RedirectPaths.SESSION_ATTRIBUTE, "/events/E1/seats");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        assertThat(response.getRedirectedUrl())
+                .isEqualTo("https://front.example/oauth2/redirect?accessToken=AT&redirect=/events/E1/seats");
+        assertThat(request.getSession().getAttribute(RedirectPaths.SESSION_ATTRIBUTE)).isNull();
+    }
+
+    @Test
+    void redirect_값으로_다른_쿼리_파라미터를_주입할_수_없다() throws Exception {
+        when(jwtTokenProvider.generateAccessToken(authentication)).thenReturn("AT");
+        when(jwtTokenProvider.generateRefreshToken(42L)).thenReturn("RT");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(RedirectPaths.SESSION_ATTRIBUTE, "/x&accessToken=forged");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        MultiValueMap<String, String> query = UriComponentsBuilder
+                .fromUriString(response.getRedirectedUrl()).build().getQueryParams();
+        assertThat(query.get("accessToken")).containsExactly("AT"); // & 가 인코딩되어 파라미터가 늘지 않는다
+        assertThat(URLDecoder.decode(query.getFirst("redirect"), StandardCharsets.UTF_8))
+                .isEqualTo("/x&accessToken=forged");
     }
 }

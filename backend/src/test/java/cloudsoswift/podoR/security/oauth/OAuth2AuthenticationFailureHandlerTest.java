@@ -27,4 +27,20 @@ class OAuth2AuthenticationFailureHandlerTest {
                 .startsWith("https://front.example/login?error=")
                 .contains("bad-credential");
     }
+
+    @Test
+    void 세션에_보관된_redirect_를_로그인_페이지로_넘겨_재시도해도_목적지를_유지한다() throws Exception {
+        OAuth2AuthenticationFailureHandler handler = new OAuth2AuthenticationFailureHandler();
+        ReflectionTestUtils.setField(handler, "frontendURL", "https://front.example");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.getSession().setAttribute(RedirectPaths.SESSION_ATTRIBUTE, "/events/E1/seats");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        handler.onAuthenticationFailure(request, response, new BadCredentialsException("bad-credential"));
+
+        assertThat(response.getRedirectedUrl())
+                .startsWith("https://front.example/login?error=")
+                .endsWith("&redirect=/events/E1/seats");
+        assertThat(request.getSession().getAttribute(RedirectPaths.SESSION_ATTRIBUTE)).isNull();
+    }
 }
