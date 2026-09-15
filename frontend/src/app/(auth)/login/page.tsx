@@ -1,23 +1,28 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import apiClient from "@/lib/axios";
+import { oauthAuthorizeUrl, safeRedirectPath } from "@/lib/redirect";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const setUser = useAuthStore((state) => state.setUser);
+  // 로그인 후 돌아갈 페이지(예: /events/X/seats). 안전하지 않으면 null.
+  const redirect = safeRedirectPath(useSearchParams().get("redirect"));
 
+  // OAuth 왕복 동안 redirect 는 BE 세션이 보관했다가 /oauth2/redirect 로 돌려준다.
   const handleGoogleLogin = () => {
-    window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
+    window.location.href = oauthAuthorizeUrl(API_BASE_URL, "google", redirect);
   };
 
   const handleKakaoLogin = () => {
-    window.location.href = `${API_BASE_URL}/oauth2/authorization/kakao`;
+    window.location.href = oauthAuthorizeUrl(API_BASE_URL, "kakao", redirect);
   };
 
   // OAuth 리다이렉트 없이 로그인 상태를 흉내내는 dev 전용 로그인.
@@ -27,7 +32,7 @@ export default function LoginPage() {
     try {
       const res = await apiClient.get("/users/me");
       setUser(res.data);
-      router.push("/");
+      router.push(redirect ?? "/");
     } catch (e) {
       console.error("mock 로그인 실패 (MSW 동작 여부 확인)", e);
     }
@@ -90,5 +95,14 @@ export default function LoginPage() {
       </p>
 
     </div>
+  );
+}
+
+// useSearchParams 를 쓰는 클라이언트 컴포넌트는 Suspense 경계가 필요하다(/oauth2/redirect 와 같은 방식).
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   );
 }

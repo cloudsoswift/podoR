@@ -165,6 +165,20 @@ export const handlers = [
     return HttpResponse.json(venue);
   }),
 
+  // 대기열 - 입장/폴링. 기본은 바로 입장(ADMITTED). 대기·오픈 전은 테스트에서 server.use 로 덮어쓴다.
+  http.post(`${BASE_URL}/events/:eventId/queue`, () => {
+    return HttpResponse.json({
+      status: "ADMITTED",
+      passExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+      opensAt: "2026-01-01T00:00:00",
+    });
+  }),
+
+  // 대기열 - 이탈
+  http.delete(`${BASE_URL}/events/:eventId/queue`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // 티켓팅 - 내 좌석 quota (이 시리즈에서 쓴 좌석수 / 1인 최대)
   http.get(`${BASE_URL}/events/:eventId/my-seat-quota`, () => {
     return HttpResponse.json({ used: 0, max: 4 });

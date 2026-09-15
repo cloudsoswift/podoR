@@ -4,6 +4,7 @@ import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import apiClient from '@/lib/axios';
+import { safeRedirectPath } from '@/lib/redirect';
 
 const OAuth2RedirectHandler = () => {
   const router = useRouter();
@@ -19,13 +20,16 @@ const OAuth2RedirectHandler = () => {
       return;
     }
 
+    // 로그인 전에 있던 페이지. BE 가 검증해 보냈더라도 이 URL 은 누구나 조립할 수 있으므로 다시 검증한다.
+    const redirect = safeRedirectPath(searchParams.get('redirect')) ?? '/';
+
     setAccessToken(accessToken);
 
     apiClient.get('/users/me')
       .then((res) => {
         setUser(res.data);
-        window.history.replaceState({}, '', '/');
-        router.push('/');
+        // replace: 토큰이 담긴 이 주소를 방문 기록에 남기지 않는다.
+        router.replace(redirect);
       })
       .catch(() => {
         router.push('/login');

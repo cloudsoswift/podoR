@@ -1,5 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/store/authStore";
+import { loginRedirectUrl } from "@/lib/redirect";
+import { gatedEventId, notifyQueuePassLost } from "@/lib/queuePassLost";
 
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080",
@@ -46,6 +48,13 @@ apiClient.interceptors.response.use(
     // 실패한 요청의 원래 설정
     const original = error.config as RetryableRequest;
 
+    // 게이트 대상 API 의 403 = 입장권을 잃음. 대기열 게이트에 알린다.
+    // 알리기만 하고 거부는 그대로 전달한다 — 호출부의 catch(안내 문구 등)는 평소대로 실행된다.
+    if (error.response?.status === 403) {
+      const eventId = gatedEventId(original?.url);
+      if (eventId) notifyQueuePassLost(eventId);
+    }
+
     // 401이 아닌 에러 || _retry(이전(또는 동시)요청에서 refresh 처리중인 경우) -> 에러
     if (error.response?.status !== 401 || original?._retry) {
       return Promise.reject(error);
@@ -85,8 +94,8 @@ apiClient.interceptors.response.use(
       processQueue(refreshError, null);
       // store의 인증 상태 초기화
       useAuthStore.getState().clearAuth();
-      // 로그인 페이지로 이동
-      window.location.href = "/login";
+      // 로그인 페이지로 이동 — 로그인 후 지금 페이지로 돌아오도록 경로를 싣는다
+      window.location.href = loginRedirectUrl(window.location);
       return Promise.reject(refreshError);
     } finally {
       // 결과에 상관 없이 isRefreshing는 항상 해제
