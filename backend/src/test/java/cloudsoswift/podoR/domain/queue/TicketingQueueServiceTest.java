@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.queue;
 
+import cloudsoswift.podoR.domain.event.cache.EventTicketingDateCache;
 import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.queue.dto.QueueStatusResponse;
@@ -24,6 +25,7 @@ class TicketingQueueServiceTest {
 
     @Mock EventRepository eventRepository;
     @Mock WaitingQueueService waitingQueue;
+    @Mock EventTicketingDateCache ticketingDateCache;
 
     @InjectMocks TicketingQueueService service;
 
@@ -110,6 +112,35 @@ class TicketingQueueServiceTest {
         service.leave(EVENT_ID, USER);
 
         verify(waitingQueue).leave(EVENT_ID, USER);
+    }
+
+    @Test
+    void 캐시에_티켓팅시각이_있으면_DB_를_조회하지_않는다() {
+        LocalDateTime opensAt = LocalDateTime.now().minusMinutes(1);
+        when(ticketingDateCache.get(EVENT_ID)).thenReturn(Optional.of(opensAt));
+        when(waitingQueue.enterOrPoll(EVENT_ID, USER))
+                .thenReturn(new QueueSnapshot(QueueStatus.WAITING, 0L, null));
+
+        QueueStatusResponse r = service.enterOrPoll(EVENT_ID, USER);
+
+        assertThat(r.status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(r.opensAt()).isEqualTo(opensAt);
+        // 폴링마다 같은 행을 다시 읽는것을 반복하지 않는 것이 이 캐시의 핵심임
+        verifyNoInteractions(eventRepository);
+    }
+
+    @Test
+    void 캐시가_비어_있으면_DB_에서_읽어_캐시에_채운다() {
+        LocalDateTime opensAt = LocalDateTime.now().minusMinutes(1);
+        Event event = mockEvent(opensAt);
+        when(ticketingDateCache.get(EVENT_ID)).thenReturn(Optional.empty());
+        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
+        when(waitingQueue.enterOrPoll(EVENT_ID, USER))
+                .thenReturn(new QueueSnapshot(QueueStatus.WAITING, 0L, null));
+
+        service.enterOrPoll(EVENT_ID, USER);
+
+        verify(ticketingDateCache).put(EVENT_ID, opensAt);
     }
 
     @Test

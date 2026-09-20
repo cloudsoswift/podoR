@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.event.service;
 
+import cloudsoswift.podoR.domain.event.cache.EventTicketingDateCache;
 import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.dto.EventCreateRequest;
 import cloudsoswift.podoR.domain.event.dto.EventResponse;
@@ -29,6 +30,7 @@ public class EventService {
     private final VenueRepository venueRepository;
     private final UserService userService;
     private final EventSeriesRepository eventSeriesRepository;
+    private final EventTicketingDateCache ticketingDateCache;
 
     private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
 
@@ -89,12 +91,15 @@ public class EventService {
         Venue venue = findVenue(request.getVenueSeq());
         event.update(request.getTitle(), request.getContent(), request.getEventType(),
                 request.getEventDate(), request.getTicketingDate(), venue);
+        // 대기열 폴링이 티켓팅 시각을 캐시에서 읽으므로, 바뀌었으면 즉시 비운다(안 비우면 TTL 만큼 옛 값).
+        ticketingDateCache.evict(eventId);
         return new EventResponse(event);
     }
 
     @Transactional
     public void delete(String eventId) {
         findActiveEvent(eventId).softDelete();
+        ticketingDateCache.evict(eventId);
     }
 
     private Event findActiveEvent(String eventId) {
