@@ -15,6 +15,12 @@ public interface EventSeatRepository extends JpaRepository<EventSeat, Long> {
     @Query("SELECT es FROM EventSeat es JOIN FETCH es.seat WHERE es.event.seq = :eventSeq")
     List<EventSeat> findAllByEventSeqWithSeat(@Param("eventSeq") Long eventSeq);
 
+    /**
+     * 좌석 id만 조회하는 쿼리 (폴링시 seat 조인과 엔티티 생성하는 로직을  피함)
+     */
+    @Query("SELECT es.seq FROM EventSeat es WHERE es.event.seq = :eventSeq")
+    List<Long> findSeqsByEventSeq(@Param("eventSeq") Long eventSeq);
+
     // 증분: change_version 초과분만 (seat fetch join)
     @Query("SELECT es FROM EventSeat es JOIN FETCH es.seat " +
             "WHERE es.event.seq = :eventSeq AND es.changeVersion > :since " +

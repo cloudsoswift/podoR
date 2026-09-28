@@ -58,9 +58,8 @@ public class SeatViewService {
                 ? eventSeatRepository.findChangesSince(event.getSeq(), since)
                 : eventSeatRepository.findChangesSinceInSection(event.getSeq(), since, section);
         long cursor = changed.stream().mapToLong(EventSeat::getChangeVersion).max().orElse(since);
-        // 현재 이벤트 전체 좌석 기준 선점 집합(작아서 저렴)
-        List<Long> allSeqs = eventSeatRepository.findAllByEventSeqWithSeat(event.getSeq())
-                .stream().map(EventSeat::getSeq).toList();
+        // 선점된 좌석 집합 조회를 위해, 좌석 id들만 먼저 조회한다.
+        List<Long> allSeqs = eventSeatRepository.findSeqsByEventSeq(event.getSeq());
         return new SeatViewChangesResponse(cursor, changed.stream().map(SeatViewSeatDto::from).toList(),
                 seatHoldService.heldAmong(allSeqs));
     }

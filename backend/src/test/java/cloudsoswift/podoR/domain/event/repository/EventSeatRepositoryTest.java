@@ -112,6 +112,25 @@ class EventSeatRepositoryTest {
         assertThat(r).extracting(EventSeat::getChangeVersion).containsExactly(2L, 3L);
     }
 
+    /**
+     * 선점 조회(heldAmong)는 좌석 id 목록만 있으면 된다.
+     * 엔티티 전체를 읽어 seq만 꺼내 쓰던 것을 대체
+     */
+    @Test
+    void findSeqsByEventSeq_해당이벤트의_좌석_seq만_상태와_무관하게_반환() {
+        Event e1 = event("E1");
+        Event e2 = event("E2");
+        EventSeat available = eventSeat(e1, "A", SeatStatus.AVAILABLE, 0L);
+        EventSeat sold = eventSeat(e1, "B", SeatStatus.SOLD, 3L);
+        eventSeat(e2, "A", SeatStatus.AVAILABLE, 0L); // 다른 이벤트
+        em.flush();
+        em.clear();
+
+        List<Long> seqs = repo.findSeqsByEventSeq(e1.getSeq());
+
+        assertThat(seqs).containsExactlyInAnyOrder(available.getSeq(), sold.getSeq());
+    }
+
     @Test
     void findChangesSinceInSection_섹션필터() {
         Event e = event("E1");
