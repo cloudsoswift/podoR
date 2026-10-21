@@ -63,6 +63,9 @@ services:
       # relaxed binding: SPRING_DATA_REDIS_HOST -> spring.data.redis.host
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
+      # ticketingDate·입장권 만료 등 LocalDateTime 이 KST 벽시계 기준이므로 JVM 타임존을 고정한다.
+      # (컨테이너 기본값은 UTC → 응답 시각이 9시간 어긋나 대기열 게이트가 무한 재입장한다)
+      TZ: Asia/Seoul
     depends_on:
       postgres:
         condition: service_healthy
