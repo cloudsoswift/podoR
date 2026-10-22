@@ -11,13 +11,17 @@ interface Props {
   // 줌 역수(1/z). 앵커·핸들·선 두께를 화면상 일정 크기로 유지하는 데 곱한다.
   scale: number;
   bodyCursor: string;
-  onSectionPointerDown: (e: React.PointerEvent, sectionId: string) => void;
-  onAnchorPointerDown: (
+  // 매진 등으로 흐리게 표시(예매 화면 섹션 맵).
+  dimmed?: boolean;
+  onSectionPointerDown?: (e: React.PointerEvent, sectionId: string) => void;
+  // 바디 click(예매 화면: 드래그와 구분된 클릭으로 섹션 진입).
+  onSectionClick?: (sectionId: string) => void;
+  onAnchorPointerDown?: (
     e: React.PointerEvent,
     sectionId: string,
     anchorId: string,
   ) => void;
-  onHandlePointerDown: (
+  onHandlePointerDown?: (
     e: React.PointerEvent,
     sectionId: string,
     anchorId: string,
@@ -32,7 +36,9 @@ export default function SectionShape({
   editable,
   scale,
   bodyCursor,
+  dimmed = false,
   onSectionPointerDown,
+  onSectionClick,
   onAnchorPointerDown,
   onHandlePointerDown,
 }: Props) {
@@ -44,15 +50,16 @@ export default function SectionShape({
       <path
         d={d}
         fill={section.color}
-        fillOpacity={selected ? 0.45 : 0.28}
-        stroke={section.color}
+        fillOpacity={dimmed ? 0.1 : selected ? 0.45 : 0.28}
+        stroke={dimmed ? "#9ca3af" : section.color}
         strokeWidth={(selected ? 2.5 : 1.5) * s}
         strokeLinejoin="round"
         style={{
           pointerEvents: bodyInteractive ? "auto" : "none",
           cursor: bodyInteractive ? bodyCursor : "default",
         }}
-        onPointerDown={(e) => onSectionPointerDown(e, section.id)}
+        onPointerDown={(e) => onSectionPointerDown?.(e, section.id)}
+        onClick={onSectionClick ? () => onSectionClick(section.id) : undefined}
       />
 
       {editable &&
@@ -96,7 +103,7 @@ export default function SectionShape({
                 strokeWidth={1.5 * s}
                 style={{ cursor: "grab" }}
                 onPointerDown={(e) =>
-                  onHandlePointerDown(e, section.id, a.id, "in")
+                  onHandlePointerDown?.(e, section.id, a.id, "in")
                 }
               />
             )}
@@ -111,7 +118,7 @@ export default function SectionShape({
                 strokeWidth={1.5 * s}
                 style={{ cursor: "grab" }}
                 onPointerDown={(e) =>
-                  onHandlePointerDown(e, section.id, a.id, "out")
+                  onHandlePointerDown?.(e, section.id, a.id, "out")
                 }
               />
             )}
@@ -125,7 +132,7 @@ export default function SectionShape({
               stroke="#fff"
               strokeWidth={2 * s}
               style={{ cursor: "grab" }}
-              onPointerDown={(e) => onAnchorPointerDown(e, section.id, a.id)}
+              onPointerDown={(e) => onAnchorPointerDown?.(e, section.id, a.id)}
             />
           </g>
         ))}

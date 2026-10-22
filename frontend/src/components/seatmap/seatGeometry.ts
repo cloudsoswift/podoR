@@ -65,6 +65,40 @@ export function rowLabel(index: number): string {
 }
 
 /**
+ * gridRow → 행 라벨. 좌석이 존재하는 gridRow 를 위→아래로 모아 A,B,C… (가용 여부와 무관).
+ * 저장(allSeatsForSave)·에디터 표시·예매 화면 매칭이 모두 이 규칙을 공유한다.
+ */
+export function rowLabelsByGridRow(seats: Seat[]): Map<number, string> {
+  const rowsPresent = [...new Set(seats.map((s) => s.gridRow))].sort(
+    (a, b) => a - b,
+  );
+  return new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
+}
+
+// 좌석 간격을 알 수 없을 때(좌석 1개 이하) 쓰는 기본 간격(px).
+export const DEFAULT_PITCH = 20;
+
+/** 좌석 반지름(콘텐츠 단위). 간격에서 유도해 줌하면 간격과 함께 스케일된다. */
+export function seatRadius(colPitch: number, rowPitch: number): number {
+  return Math.max(1, Math.min(colPitch, rowPitch) * 0.4);
+}
+
+/**
+ * 좌석 좌표만으로 간격을 추정한다(저장 문서에는 격자 설정이 없다).
+ * 각 좌석의 최근접 이웃 거리 중 최솟값.
+ */
+export function pitchFromSeats(seats: Point[]): number {
+  let best = Infinity;
+  for (let i = 0; i < seats.length; i++) {
+    for (let j = i + 1; j < seats.length; j++) {
+      const d = Math.hypot(seats[i].x - seats[j].x, seats[i].y - seats[j].y);
+      if (d > 0 && d < best) best = d;
+    }
+  }
+  return Number.isFinite(best) ? best : DEFAULT_PITCH;
+}
+
+/**
  * 저장용 좌석 목록(사용 좌석만)으로 정규화한다.
  * - 행: 사용 좌석이 있는 행만 위→아래로 모아 A,B,C… 재부여(빈 앞행/중간행으로 인한 결번 없음).
  * - 열 번호: 생성 시 번호 유지(미사용 좌석으로 인한 결번은 그대로 둠).
@@ -97,10 +131,7 @@ export function compactUsedSeats(
 export function allSeatsForSave(
   seats: Seat[],
 ): { gridRow: number; row: string; number: number; available: boolean }[] {
-  const rowsPresent = [...new Set(seats.map((s) => s.gridRow))].sort(
-    (a, b) => a - b,
-  );
-  const labelByRow = new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
+  const labelByRow = rowLabelsByGridRow(seats);
   return seats
     .slice()
     .sort((a, b) => a.gridRow - b.gridRow || a.number - b.number)

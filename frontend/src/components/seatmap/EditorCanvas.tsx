@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { clamp, dist, snapCornerRightAngle, snapToRightAngle } from "./geometry";
 import {
   CLOSE_RADIUS,
@@ -12,34 +12,24 @@ import { BgCorner, HandleSide, Point } from "./types";
 import BackgroundLayer from "./BackgroundLayer";
 import DraftLayer from "./DraftLayer";
 import SectionShape from "./SectionShape";
+import MapCanvas from "./MapCanvas";
+import { usePanZoom } from "./usePanZoom";
 
 interface Props {
   state: EditorState;
   dispatch: React.Dispatch<EditorAction>;
 }
 
-/** 콘텐츠 그룹에 적용되는 카메라: translate(tx,ty) 후 scale(z). */
-interface View {
-  tx: number;
-  ty: number;
-  z: number;
-}
-
-const MIN_Z = 0.2;
-const MAX_Z = 8;
-const INITIAL_VIEW: View = { tx: 0, ty: 0, z: 1 };
 const DBL_MS = 300;
 
 type DragTarget =
   | { kind: "anchor"; sectionId: string; anchorId: string }
   | { kind: "handle"; sectionId: string; anchorId: string; side: HandleSide }
   | { kind: "section"; sectionId: string; last: Point }
-  | { kind: "pan"; startRoot: Point; startTx: number; startTy: number }
   | { kind: "bg-move"; last: Point }
   | { kind: "bg-resize"; corner: BgCorner; fixed: Point };
 
 export default function EditorCanvas({ state, dispatch }: Props) {
-  const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragTarget | null>(null);
   // 포인터 캡처가 click 을 SVG 로 재타게팅하므로, 도형/앵커 조작 후의 click 은 무시한다.
   const suppressClickRef = useRef(false);
@@ -53,37 +43,9 @@ export default function EditorCanvas({ state, dispatch }: Props) {
     time: number;
   } | null>(null);
 
-  // 카메라. 네이티브 휠 리스너에서도 최신값을 읽도록 ref 로 미러링.
-  const [view, setViewState] = useState<View>(INITIAL_VIEW);
-  const viewRef = useRef<View>(INITIAL_VIEW);
-  const [panning, setPanning] = useState(false);
-
-  function applyView(next: View) {
-    const v: View = {
-      tx: next.tx,
-      ty: next.ty,
-      z: clamp(next.z, MIN_Z, MAX_Z),
-    };
-    viewRef.current = v;
-    setViewState(v);
-  }
-
-  /** 화면 좌표 -> 루트(viewBox) 좌표. g 변환은 포함하지 않는다. */
-  function toRoot(clientX: number, clientY: number): Point {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return { x: 0, y: 0 };
-    const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
-    return { x: p.x, y: p.y };
-  }
-
-  /** 화면 좌표 -> 콘텐츠 좌표(카메라 역변환). clamp 하지 않는다. */
-  function toContent(e: React.PointerEvent | React.MouseEvent): Point {
-    const r = toRoot(e.clientX, e.clientY);
-    const v = viewRef.current;
-    return { x: (r.x - v.tx) / v.z, y: (r.y - v.ty) / v.z };
-  }
+  // 카메라(팬/줌)는 공용 뷰포트 훅이 관리한다.
+  const pz = usePanZoom();
+  const { svgRef, view, viewRef, toContent } = pz;
 
   /** 화면 좌표 -> 콘텐츠 좌표 후 종이 영역으로 clamp. */
   function toSvg(e: React.PointerEvent | React.MouseEvent): Point {
@@ -121,32 +83,6 @@ export default function EditorCanvas({ state, dispatch }: Props) {
     return { x: clamp(snapped.x, 0, VIEW_W), y: clamp(snapped.y, 0, VIEW_H) };
   }
 
-  /** 주어진 루트 좌표를 고정점으로 factor 배 줌. */
-  function zoomBy(factor: number, root: Point) {
-    const v = viewRef.current;
-    const newZ = clamp(v.z * factor, MIN_Z, MAX_Z);
-    const k = newZ / v.z;
-    if (k === 1) return;
-    applyView({
-      z: newZ,
-      tx: root.x - (root.x - v.tx) * k,
-      ty: root.y - (root.y - v.ty) * k,
-    });
-  }
-
-  // 네이티브 휠 리스너(React onWheel 은 passive 라 preventDefault 가 불안정).
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      zoomBy(Math.exp(-e.deltaY * 0.0015), toRoot(e.clientX, e.clientY));
-    }
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // 가운데 버튼(button 1)은 어느 도구에서나 팬. (키보드 조합 아님)
   function shouldPan(e: React.PointerEvent): boolean {
     return state.tool === "pan" || e.button === 1;
@@ -155,15 +91,7 @@ export default function EditorCanvas({ state, dispatch }: Props) {
   function startPan(e: React.PointerEvent) {
     e.stopPropagation();
     suppressClickRef.current = true;
-    svgRef.current?.setPointerCapture(e.pointerId);
-    const v = viewRef.current;
-    dragRef.current = {
-      kind: "pan",
-      startRoot: toRoot(e.clientX, e.clientY),
-      startTx: v.tx,
-      startTy: v.ty,
-    };
-    setPanning(true);
+    pz.beginPan(e);
   }
 
   function beginSectionDrag(e: React.PointerEvent, sectionId: string) {
@@ -268,17 +196,9 @@ export default function EditorCanvas({ state, dispatch }: Props) {
   }
 
   function handlePointerMove(e: React.PointerEvent) {
+    if (pz.updatePan(e)) return;
     const drag = dragRef.current;
     if (drag) {
-      if (drag.kind === "pan") {
-        const root = toRoot(e.clientX, e.clientY);
-        applyView({
-          z: viewRef.current.z,
-          tx: drag.startTx + (root.x - drag.startRoot.x),
-          ty: drag.startTy + (root.y - drag.startRoot.y),
-        });
-        return;
-      }
       if (drag.kind === "section") {
         const cur = toSvg(e);
         const dx = cur.x - drag.last.x;
@@ -340,9 +260,9 @@ export default function EditorCanvas({ state, dispatch }: Props) {
   }
 
   function handlePointerUp(e: React.PointerEvent) {
+    if (pz.endPan(e)) return;
     if (dragRef.current) {
       svgRef.current?.releasePointerCapture(e.pointerId);
-      if (dragRef.current.kind === "pan") setPanning(false);
       dragRef.current = null;
     }
   }
@@ -384,7 +304,7 @@ export default function EditorCanvas({ state, dispatch }: Props) {
 
   const svgCursor =
     state.tool === "pan"
-      ? panning
+      ? pz.panning
         ? "grabbing"
         : "grab"
       : state.tool === "pen"
@@ -392,117 +312,55 @@ export default function EditorCanvas({ state, dispatch }: Props) {
         : "default";
 
   return (
-    <div className="relative h-full w-full">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="h-full w-full touch-none select-none bg-white"
-        style={{ cursor: svgCursor }}
-        onClick={handleClick}
-        onPointerDown={handleBackgroundPointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={() => {
+    <MapCanvas
+      pz={pz}
+      cursor={svgCursor}
+      svgProps={{
+        onClick: handleClick,
+        onPointerDown: handleBackgroundPointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: handlePointerUp,
+        onPointerLeave: () => {
           if (state.tool === "pen") dispatch({ type: "SET_CURSOR", point: null });
-        }}
-      >
-        {/* 보조 그리드 */}
-        <defs>
-          <pattern
-            id="seatmap-grid"
-            width={40}
-            height={40}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d="M 40 0 L 0 0 0 40"
-              fill="none"
-              stroke="#f1f5f9"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          </pattern>
-        </defs>
+        },
+      }}
+    >
+      {state.background && (
+        <BackgroundLayer
+          background={state.background}
+          editable={!state.background.locked}
+          scale={invZoom}
+          onBodyPointerDown={beginBgMove}
+          onHandlePointerDown={beginBgResize}
+        />
+      )}
 
-        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.z})`}>
-          <rect
-            x={0}
-            y={0}
-            width={VIEW_W}
-            height={VIEW_H}
-            fill="url(#seatmap-grid)"
-            stroke="#e2e8f0"
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-            style={{ pointerEvents: "none" }}
+      {state.sections.map((section) => {
+        const selected = state.selectedId === section.id;
+        return (
+          <SectionShape
+            key={section.id}
+            section={section}
+            selected={bodyInteractive && selected}
+            bodyInteractive={bodyInteractive}
+            editable={state.tool === "pen" && !drawing && selected}
+            scale={invZoom}
+            bodyCursor={bodyCursor}
+            onSectionPointerDown={beginSectionDrag}
+            onAnchorPointerDown={beginAnchorDrag}
+            onHandlePointerDown={beginHandleDrag}
           />
+        );
+      })}
 
-          {state.background && (
-            <BackgroundLayer
-              background={state.background}
-              editable={!state.background.locked}
-              scale={invZoom}
-              onBodyPointerDown={beginBgMove}
-              onHandlePointerDown={beginBgResize}
-            />
-          )}
-
-          {state.sections.map((section) => {
-            const selected = state.selectedId === section.id;
-            return (
-              <SectionShape
-                key={section.id}
-                section={section}
-                selected={bodyInteractive && selected}
-                bodyInteractive={bodyInteractive}
-                editable={state.tool === "pen" && !drawing && selected}
-                scale={invZoom}
-                bodyCursor={bodyCursor}
-                onSectionPointerDown={beginSectionDrag}
-                onAnchorPointerDown={beginAnchorDrag}
-                onHandlePointerDown={beginHandleDrag}
-              />
-            );
-          })}
-
-          {state.tool === "pen" && (
-            <DraftLayer
-              draft={state.draft}
-              cursor={state.cursor}
-              canClose={canClose}
-              scale={invZoom}
-            />
-          )}
-        </g>
-      </svg>
-
-      {/* 줌 컨트롤 */}
-      <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg border border-gray-200 bg-white/90 p-1 shadow-sm backdrop-blur">
-        <button
-          type="button"
-          onClick={() => zoomBy(1 / 1.2, { x: VIEW_W / 2, y: VIEW_H / 2 })}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
-          aria-label="축소"
-        >
-          −
-        </button>
-        <button
-          type="button"
-          onClick={() => applyView(INITIAL_VIEW)}
-          className="min-w-[3rem] rounded-md px-1 text-center text-xs font-medium text-gray-600 hover:bg-gray-100"
-          title="뷰 초기화"
-        >
-          {Math.round(view.z * 100)}%
-        </button>
-        <button
-          type="button"
-          onClick={() => zoomBy(1.2, { x: VIEW_W / 2, y: VIEW_H / 2 })}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100"
-          aria-label="확대"
-        >
-          ＋
-        </button>
-      </div>
-    </div>
+      {state.tool === "pen" && (
+        <DraftLayer
+          draft={state.draft}
+          cursor={state.cursor}
+          canClose={canClose}
+          scale={invZoom}
+        />
+      )}
+    </MapCanvas>
   );
 }
