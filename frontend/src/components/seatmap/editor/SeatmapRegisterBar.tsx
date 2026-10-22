@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { AxiosError } from "axios";
-import { Section } from "./types";
-import { Seat } from "./seatTypes";
+import { Section } from "@/components/seatmap/core/types";
+import { Seat } from "@/components/seatmap/core/seatTypes";
 import {
   buildSeatmapPayload,
   findDuplicateSectionNames,
   registerSeatmap,
-} from "./seatmapApi";
+} from "@/components/seatmap/core/seatmapApi";
 
 interface Props {
   venueSeq: number;

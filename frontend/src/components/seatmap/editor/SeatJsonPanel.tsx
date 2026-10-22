@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { isValidSections } from "./geometry";
-import { compactUsedSeats } from "./seatGeometry";
+import { isValidSections } from "@/components/seatmap/core/geometry";
+import { compactUsedSeats } from "@/components/seatmap/core/seatGeometry";
 import { SeatEditorAction, SeatEditorState } from "./seatEditorReducer";
 
 interface Props {

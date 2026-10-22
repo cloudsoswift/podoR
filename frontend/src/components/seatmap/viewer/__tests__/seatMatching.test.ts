@@ -1,5 +1,5 @@
 import { SeatViewSeat } from "@/lib/api/seatview";
-import { Seat } from "@/components/seatmap/seatTypes";
+import { Seat } from "@/components/seatmap/core/seatTypes";
 import { matchSectionSeats, MatchedSeat, seatLabel, seatState } from "../seatMatching";
 
 const lay = (gridRow: number, number: number, available = true): Seat => ({

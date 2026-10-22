@@ -1,5 +1,4 @@
 import { clamp } from "./geometry";
-import { VIEW_H, VIEW_W } from "./editorReducer";
 import { Bounds } from "./seatGeometry";
 import { Point } from "./types";
 
@@ -9,6 +8,10 @@ export interface View {
   ty: number;
   z: number;
 }
+
+// 콘텐츠 좌표 공간(섹션·좌석 좌표가 사는 1000×700).
+export const VIEW_W = 1000;
+export const VIEW_H = 700;
 
 export const MIN_Z = 0.2;
 export const MAX_Z = 8;

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSeatViewPolling } from "./useSeatViewPolling";
-import { parseSeatmapDoc } from "@/components/seatmap/seatmapApi";
+import { parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
 import { holdSeats, getMySeatQuota, errorDetail } from "@/lib/api/ticketing";
 import SectionMapView from "./SectionMapView";
 import SeatMapView from "./SeatMapView";

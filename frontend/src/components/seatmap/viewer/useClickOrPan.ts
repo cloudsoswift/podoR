@@ -1,6 +1,6 @@
 import { useRef } from "react";
-import { PanZoom } from "@/components/seatmap/usePanZoom";
-import { CLICK_SLOP } from "@/components/seatmap/viewport";
+import { PanZoom } from "@/components/seatmap/core/usePanZoom";
+import { CLICK_SLOP } from "@/components/seatmap/core/viewport";
 
 /**
  * 예매 화면 캔버스 입력 규칙: 도구 전환 없이 좌클릭 드래그 = 팬, 제자리 클릭 = 섹션/좌석 클릭.

@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/seatmapApi";
-import { rowLabel } from "@/components/seatmap/seatGeometry";
-import { Section } from "@/components/seatmap/types";
-import { Seat } from "@/components/seatmap/seatTypes";
+import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
+import { rowLabel } from "@/components/seatmap/core/seatGeometry";
+import { Section } from "@/components/seatmap/core/types";
+import { Seat } from "@/components/seatmap/core/seatTypes";
 import { GradeItem, SeatKey, SeatPlanResponse, saveSeatPlan } from "@/lib/api/seatPlan";
 
 interface Props {

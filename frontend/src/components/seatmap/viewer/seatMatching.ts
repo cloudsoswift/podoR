@@ -1,6 +1,6 @@
 import { SeatViewSeat } from "@/lib/api/seatview";
-import { rowLabelsByGridRow } from "@/components/seatmap/seatGeometry";
-import { Seat } from "@/components/seatmap/seatTypes";
+import { rowLabelsByGridRow } from "@/components/seatmap/core/seatGeometry";
+import { Seat } from "@/components/seatmap/core/seatTypes";
 
 // unsold = 회차 좌석이 없음(에디터 비가용 / 미등급 / 제외 좌석).
 export type SeatState = "available" | "held" | "sold" | "unsold" | "selected";

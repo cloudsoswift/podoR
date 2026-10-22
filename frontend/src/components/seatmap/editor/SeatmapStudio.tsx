@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import SectionEditor from "./SectionEditor";
 import SeatEditor from "./SeatEditor";
 import SeatmapRegisterBar from "./SeatmapRegisterBar";
-import { Section } from "./types";
-import { Seat } from "./seatTypes";
-import { getVenueLayout, parseSeatmapDoc } from "./seatmapApi";
+import { Section } from "@/components/seatmap/core/types";
+import { Seat } from "@/components/seatmap/core/seatTypes";
+import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
 
 interface Props {
   venueSeq: number;

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { EditorAction, EditorState } from "./editorReducer";
-import { Section, Tool } from "./types";
+import { Section, Tool } from "@/components/seatmap/core/types";
 
 interface Props {
   state: EditorState;

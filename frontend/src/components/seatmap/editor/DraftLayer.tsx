@@ -1,5 +1,5 @@
 import { CLOSE_RADIUS } from "./editorReducer";
-import { Point } from "./types";
+import { Point } from "@/components/seatmap/core/types";
 
 interface Props {
   draft: Point[];

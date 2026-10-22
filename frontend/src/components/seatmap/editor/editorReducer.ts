@@ -1,4 +1,4 @@
-import { autoHandles, fitContain, genId, pointsToAnchors } from "./geometry";
+import { autoHandles, fitContain, genId, pointsToAnchors } from "@/components/seatmap/core/geometry";
 import {
   Anchor,
   BackgroundImage,
@@ -6,10 +6,9 @@ import {
   Point,
   Section,
   Tool,
-} from "./types";
+} from "@/components/seatmap/core/types";
+import { VIEW_H, VIEW_W } from "@/components/seatmap/core/viewport";
 
-export const VIEW_W = 1000;
-export const VIEW_H = 700;
 export const CLOSE_RADIUS = 12; // 첫 점 근처 클릭으로 인정하는 SVG 단위 반경
 export const MIN_ANCHORS = 3;
 

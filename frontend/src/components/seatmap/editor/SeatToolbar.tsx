@@ -1,5 +1,5 @@
 import { SeatEditorAction, SeatEditorState } from "./seatEditorReducer";
-import { GridConfig, SeatTool } from "./seatTypes";
+import { GridConfig, SeatTool } from "@/components/seatmap/core/seatTypes";
 
 interface Props {
   state: SeatEditorState;

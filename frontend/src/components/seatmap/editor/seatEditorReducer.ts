@@ -1,7 +1,7 @@
-import { genId } from "./geometry";
-import { Section } from "./types";
-import { GridConfig, Seat, SeatTool } from "./seatTypes";
-import { generateSeats } from "./seatGeometry";
+import { genId } from "@/components/seatmap/core/geometry";
+import { Section } from "@/components/seatmap/core/types";
+import { GridConfig, Seat, SeatTool } from "@/components/seatmap/core/seatTypes";
+import { generateSeats } from "@/components/seatmap/core/seatGeometry";
 
 // 좌석 편집 대상이 없을 때 사용하는 샘플 섹션(직사각형).
 export const SAMPLE_SECTION: Section = {

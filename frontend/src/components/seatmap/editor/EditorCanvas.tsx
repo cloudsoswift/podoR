@@ -1,19 +1,18 @@
 import { useRef } from "react";
-import { clamp, dist, snapCornerRightAngle, snapToRightAngle } from "./geometry";
+import { clamp, dist, snapCornerRightAngle, snapToRightAngle } from "@/components/seatmap/core/geometry";
 import {
   CLOSE_RADIUS,
   EditorAction,
   EditorState,
   MIN_ANCHORS,
-  VIEW_H,
-  VIEW_W,
 } from "./editorReducer";
-import { BgCorner, HandleSide, Point } from "./types";
+import { VIEW_H, VIEW_W } from "@/components/seatmap/core/viewport";
+import { BgCorner, HandleSide, Point } from "@/components/seatmap/core/types";
 import BackgroundLayer from "./BackgroundLayer";
 import DraftLayer from "./DraftLayer";
-import SectionShape from "./SectionShape";
-import MapCanvas from "./MapCanvas";
-import { usePanZoom } from "./usePanZoom";
+import SectionShape from "@/components/seatmap/core/SectionShape";
+import MapCanvas from "@/components/seatmap/core/MapCanvas";
+import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 
 interface Props {
   state: EditorState;

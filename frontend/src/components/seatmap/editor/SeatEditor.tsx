@@ -5,8 +5,8 @@ import {
   createInitialState,
   seatEditorReducer,
 } from "./seatEditorReducer";
-import { Section } from "./types";
-import { Seat } from "./seatTypes";
+import { Section } from "@/components/seatmap/core/types";
+import { Seat } from "@/components/seatmap/core/seatTypes";
 import SeatCanvas from "./SeatCanvas";
 import SeatToolbar from "./SeatToolbar";
 import SeatJsonPanel from "./SeatJsonPanel";

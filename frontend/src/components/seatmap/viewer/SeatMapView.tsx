@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import MapCanvas from "@/components/seatmap/MapCanvas";
-import SeatDot from "@/components/seatmap/SeatDot";
-import SectionOutline from "@/components/seatmap/SectionOutline";
-import { boundsOf, pitchFromSeats, polygonOf, seatRadius } from "@/components/seatmap/seatGeometry";
-import { Seat } from "@/components/seatmap/seatTypes";
-import { Section } from "@/components/seatmap/types";
-import { usePanZoom } from "@/components/seatmap/usePanZoom";
-import { fitView } from "@/components/seatmap/viewport";
+import MapCanvas from "@/components/seatmap/core/MapCanvas";
+import SeatDot from "@/components/seatmap/core/SeatDot";
+import SectionOutline from "@/components/seatmap/core/SectionOutline";
+import { boundsOf, pitchFromSeats, polygonOf, seatRadius } from "@/components/seatmap/core/seatGeometry";
+import { Seat } from "@/components/seatmap/core/seatTypes";
+import { Section } from "@/components/seatmap/core/types";
+import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
+import { fitView } from "@/components/seatmap/core/viewport";
 import { SeatViewSeat } from "@/lib/api/seatview";
 import { matchSectionSeats, SEAT_COLORS, seatLabel, seatState } from "./seatMatching";
 import { useClickOrPan } from "./useClickOrPan";

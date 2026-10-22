@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isValidSections } from "./geometry";
+import { isValidSections } from "@/components/seatmap/core/geometry";
 import { EditorAction, EditorState } from "./editorReducer";
 
 interface Props {

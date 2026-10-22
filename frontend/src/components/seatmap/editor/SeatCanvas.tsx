@@ -1,13 +1,13 @@
 import { useRef, useState } from "react";
-import { rowLabelsByGridRow, seatRadius } from "./seatGeometry";
+import { rowLabelsByGridRow, seatRadius } from "@/components/seatmap/core/seatGeometry";
 import { SeatEditorAction, SeatEditorState } from "./seatEditorReducer";
-import { Point } from "./types";
-import { Seat } from "./seatTypes";
-import MapCanvas from "./MapCanvas";
-import SeatDot from "./SeatDot";
-import SectionOutline from "./SectionOutline";
-import { usePanZoom } from "./usePanZoom";
-import { CLICK_SLOP } from "./viewport";
+import { Point } from "@/components/seatmap/core/types";
+import { Seat } from "@/components/seatmap/core/seatTypes";
+import MapCanvas from "@/components/seatmap/core/MapCanvas";
+import SeatDot from "@/components/seatmap/core/SeatDot";
+import SectionOutline from "@/components/seatmap/core/SectionOutline";
+import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
+import { CLICK_SLOP } from "@/components/seatmap/core/viewport";
 
 interface Props {
   state: SeatEditorState;

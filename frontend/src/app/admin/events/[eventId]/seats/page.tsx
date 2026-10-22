@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import EventSeatPlanEditor from "@/components/seatplan/EventSeatPlanEditor";
+import EventSeatPlanEditor from "@/components/seatmap/planner/EventSeatPlanEditor";
 import { getEvent } from "@/lib/api/events";
 import { getSeatPlan, SeatPlanResponse } from "@/lib/api/seatPlan";
 

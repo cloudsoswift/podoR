@@ -1,7 +1,6 @@
 import { useId } from "react";
-import { VIEW_H, VIEW_W } from "./editorReducer";
 import { PanZoom } from "./usePanZoom";
-import { viewTransform } from "./viewport";
+import { VIEW_H, VIEW_W, viewTransform } from "./viewport";
 
 interface Props {
   pz: PanZoom;

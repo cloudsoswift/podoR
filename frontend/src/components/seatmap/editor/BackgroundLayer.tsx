@@ -1,4 +1,4 @@
-import { BackgroundImage, BgCorner } from "./types";
+import { BackgroundImage, BgCorner } from "@/components/seatmap/core/types";
 
 interface Props {
   background: BackgroundImage;

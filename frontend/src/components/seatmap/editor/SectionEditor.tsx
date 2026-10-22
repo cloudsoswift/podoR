@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer } from "react";
 import { editorReducer, initialState } from "./editorReducer";
-import { Section } from "./types";
+import { Section } from "@/components/seatmap/core/types";
 import EditorCanvas from "./EditorCanvas";
 import EditorToolbar from "./EditorToolbar";
 import JsonPanel from "./JsonPanel";

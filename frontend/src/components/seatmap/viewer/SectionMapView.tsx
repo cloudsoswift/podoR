@@ -1,9 +1,9 @@
 "use client";
 
-import MapCanvas from "@/components/seatmap/MapCanvas";
-import SectionShape from "@/components/seatmap/SectionShape";
-import { usePanZoom } from "@/components/seatmap/usePanZoom";
-import { Section } from "@/components/seatmap/types";
+import MapCanvas from "@/components/seatmap/core/MapCanvas";
+import SectionShape from "@/components/seatmap/core/SectionShape";
+import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
+import { Section } from "@/components/seatmap/core/types";
 import { useClickOrPan } from "./useClickOrPan";
 
 interface Props {

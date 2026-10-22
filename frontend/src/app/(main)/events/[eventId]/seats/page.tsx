@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import SeatViewClient from "@/components/seatview/SeatViewClient";
+import SeatViewClient from "@/components/seatmap/viewer/SeatViewClient";
 
 export default function EventSeatsPage({
   params,
