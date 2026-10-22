@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
@@ -14,27 +14,69 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }))
 
 const mockedPolling = useSeatViewPolling as jest.MockedFunction<typeof useSeatViewPolling>;
 
-const SECTION = "A구역";
-const layoutJson = JSON.stringify([{ id: "s1", name: SECTION, color: "#000000" }]);
+// jsdom 에는 PointerEvent 가 없어 fireEvent.pointer* 의 clientX 가 버려진다(드래그 판정 테스트용).
+if (!window.PointerEvent) {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+    }
+  }
+  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+}
 
-const seat = (seq: number, seatNumber: number): SeatViewSeat => ({
+const SECTION = "A구역";
+// 에디터가 저장하는 SeatmapDoc: 사각형 섹션 1개 + 1행 4석(4번은 에디터에서 '사용 안 함').
+const anchor = (id: string, x: number, y: number) => ({ id, x, y, handleIn: null, handleOut: null });
+const layoutSeat = (number: number, available = true) => ({
+  id: `seat-${number}`,
+  x: number * 20,
+  y: 20,
+  gridRow: 0,
+  number,
+  available,
+});
+const layoutJson = JSON.stringify({
+  version: 1,
+  sections: [
+    {
+      id: "s1",
+      name: SECTION,
+      color: "#000000",
+      anchors: [anchor("a1", 0, 0), anchor("a2", 100, 0), anchor("a3", 100, 40), anchor("a4", 0, 40)],
+    },
+  ],
+  seatsBySection: { s1: [layoutSeat(1), layoutSeat(2), layoutSeat(3), layoutSeat(4, false)] },
+});
+
+const seat = (seq: number, seatNumber: number, status: SeatViewSeat["status"] = "AVAILABLE"): SeatViewSeat => ({
   eventSeatSeq: seq,
   section: SECTION,
   rowNumber: "A",
   seatNumber,
   grade: "VIP",
   price: 10000,
-  status: "AVAILABLE",
+  status,
   changeVersion: 0,
 });
 
 const seats = [seat(1, 1), seat(2, 2), seat(3, 3)];
 
 /** 훅 반환값 설정. refresh 는 호출 검증용 jest.fn. */
-function setupPolling(refresh = jest.fn()) {
-  mockedPolling.mockReturnValue({ seats, layoutJson, heldSeats: [], loading: false, refresh });
+function setupPolling(refresh = jest.fn(), opts: { seats?: SeatViewSeat[]; heldSeats?: number[] } = {}) {
+  mockedPolling.mockReturnValue({
+    seats: opts.seats ?? seats,
+    layoutJson,
+    heldSeats: opts.heldSeats ?? [],
+    loading: false,
+    refresh,
+  });
   return refresh;
 }
+
+/** 좌석 맵의 좌석(SVG circle, role=button). */
+const seatButton = (name: string) => screen.getByRole("button", { name });
 
 /** my-seat-quota 응답 지정. */
 function stubQuota(used: number, max: number) {
@@ -81,11 +123,11 @@ test("남은 할당량을 초과하면 좌석이 더 선택되지 않고 안내�
   await user.click(screen.getByRole("button", { name: /A구역/ }));
 
   // 잔여 1석 → 첫 좌석은 선택된다
-  await user.click(screen.getByTitle(/^A1 ·/));
+  await user.click(seatButton("A열 1번 · VIP"));
   expect(screen.getByText("선택 1석")).toBeInTheDocument();
 
   // 두 번째는 거부되고 안내가 뜬다
-  await user.click(screen.getByTitle(/^A2 ·/));
+  await user.click(seatButton("A열 2번 · VIP"));
   expect(window.alert).toHaveBeenCalledWith("이 공연은 1인 최대 4석까지 예매할 수 있습니다.");
   expect(screen.getByText("선택 1석")).toBeInTheDocument();
 });
@@ -103,7 +145,7 @@ test("선점에 성공하면 선택을 비워 결제 바에 갇히지 않는다"
   render(<SeatViewClient eventId="E1" />);
   await screen.findByText("현재 0 / 4");
   await user.click(screen.getByRole("button", { name: /A구역/ }));
-  await user.click(screen.getByTitle(/^A1 ·/));
+  await user.click(seatButton("A열 1번 · VIP"));
   expect(screen.getByText("선택 1석")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "결제하기" }));
@@ -128,7 +170,7 @@ test("선점 실패 시 서버가 보낸 사유를 그대로 안내한다", asyn
   render(<SeatViewClient eventId="E1" />);
   await screen.findByText("현재 0 / 4");
   await user.click(screen.getByRole("button", { name: /A구역/ }));
-  await user.click(screen.getByTitle(/^A1 ·/));
+  await user.click(seatButton("A열 1번 · VIP"));
   await user.click(screen.getByRole("button", { name: "결제하기" }));
 
   await waitFor(() =>
@@ -152,7 +194,7 @@ test("선점 요청 중에는 결제하기가 중복 호출되지 않는다", as
   render(<SeatViewClient eventId="E1" />);
   await screen.findByText("현재 0 / 4");
   await user.click(screen.getByRole("button", { name: /A구역/ }));
-  await user.click(screen.getByTitle(/^A1 ·/));
+  await user.click(seatButton("A열 1번 · VIP"));
 
   const pay = screen.getByRole("button", { name: "결제하기" });
   await user.click(pay);
@@ -197,4 +239,88 @@ test("새로고침 버튼은 쿨다운 동안 비활성이고 연타를 무시�
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   });
+});
+
+test("판매하지 않는 좌석은 그려지지만 선택되지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  const unsold = seatButton("A열 4번");
+  expect(unsold).toHaveAttribute("aria-disabled", "true");
+  await user.click(unsold);
+  expect(screen.queryByText(/선택 \d+석/)).not.toBeInTheDocument();
+});
+
+test("선점중·판매완료 좌석은 선택되지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling(jest.fn(), { seats: [seat(1, 1), seat(2, 2), seat(3, 3, "SOLD")], heldSeats: [2] });
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  await user.click(seatButton("A열 2번 · VIP"));
+  await user.click(seatButton("A열 3번 · VIP"));
+  expect(screen.queryByRole("button", { name: "결제하기" })).not.toBeInTheDocument();
+});
+
+test("매진 섹션도 진입할 수 있다", async () => {
+  const user = userEvent.setup();
+  setupPolling(jest.fn(), { seats: [seat(1, 1, "SOLD"), seat(2, 2, "SOLD"), seat(3, 3, "SOLD")] });
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  const entry = screen.getByRole("button", { name: /A구역/ });
+  expect(entry).toBeEnabled();
+  await user.click(entry);
+
+  expect(screen.getByRole("button", { name: "새로고침" })).toBeInTheDocument();
+  for (const name of ["A열 1번 · VIP", "A열 2번 · VIP", "A열 3번 · VIP", "A열 4번"]) {
+    expect(seatButton(name)).toHaveAttribute("aria-disabled", "true");
+  }
+});
+
+test("좌석 툴팁에 가격이 없다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  const { container } = render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  const titles = [...container.querySelectorAll("circle > title")].map((t) => t.textContent);
+  expect(titles).toHaveLength(4);
+  for (const t of titles) expect(t).not.toMatch(/원/);
+});
+
+test("드래그로 팬한 뒤에는 좌석이 선택되지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  const { container } = render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  const target = seatButton("A열 1번 · VIP");
+  const svg = container.querySelector("svg")!;
+  fireEvent.pointerDown(target, { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
+  fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, pointerId: 1 });
+  fireEvent.pointerUp(svg, { clientX: 50, clientY: 0, pointerId: 1 });
+  fireEvent.click(target);
+
+  expect(screen.queryByText("선택 1석")).not.toBeInTheDocument();
+
+  // 팬 직후라도 키보드 선택은 막히지 않는다.
+  target.focus();
+  await user.keyboard("{Enter}");
+  expect(screen.getByText("선택 1석")).toBeInTheDocument();
 });

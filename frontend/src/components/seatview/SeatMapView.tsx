@@ -1,0 +1,72 @@
+"use client";
+
+import { useMemo } from "react";
+import MapCanvas from "@/components/seatmap/MapCanvas";
+import SeatDot from "@/components/seatmap/SeatDot";
+import SectionOutline from "@/components/seatmap/SectionOutline";
+import { boundsOf, pitchFromSeats, polygonOf, seatRadius } from "@/components/seatmap/seatGeometry";
+import { Seat } from "@/components/seatmap/seatTypes";
+import { Section } from "@/components/seatmap/types";
+import { usePanZoom } from "@/components/seatmap/usePanZoom";
+import { fitView } from "@/components/seatmap/viewport";
+import { SeatViewSeat } from "@/lib/api/seatview";
+import { matchSectionSeats, SEAT_COLORS, seatLabel, seatState } from "./seatMatching";
+import { useClickOrPan } from "./useClickOrPan";
+
+interface Props {
+  section: Section;
+  layoutSeats: Seat[];
+  // 이 섹션의 회차 좌석.
+  eventSeats: SeatViewSeat[];
+  held: Set<number>;
+  selected: Set<number>;
+  onToggle(eventSeatSeq: number): void;
+}
+
+/** 2단계: 에디터에서 배치한 위치 그대로의 좌석 맵. 진입 시 섹션이 화면에 꽉 차게 맞춘다. */
+export default function SeatMapView({
+  section,
+  layoutSeats,
+  eventSeats,
+  held,
+  selected,
+  onToggle,
+}: Props) {
+  const initialView = useMemo(() => fitView(boundsOf(polygonOf(section))), [section]);
+  const pz = usePanZoom(initialView);
+  const { svgProps, guardClick } = useClickOrPan(pz);
+
+  const matched = useMemo(
+    () => matchSectionSeats(layoutSeats, eventSeats),
+    [layoutSeats, eventSeats],
+  );
+  const r = useMemo(() => {
+    const p = pitchFromSeats(layoutSeats);
+    return seatRadius(p, p);
+  }, [layoutSeats]);
+
+  return (
+    <MapCanvas pz={pz} cursor={pz.panning ? "grabbing" : "grab"} svgProps={svgProps}>
+      <SectionOutline section={section} />
+      {matched.map((m) => {
+        const state = seatState(m, held, selected);
+        const isSelected = state === "selected";
+        const event = m.event;
+        return (
+          <SeatDot
+            key={m.seat.id}
+            x={m.seat.x}
+            y={m.seat.y}
+            r={r}
+            fill={SEAT_COLORS[state]}
+            stroke={isSelected ? "#1e1b4b" : "#ffffff"}
+            strokeWidth={isSelected ? r * 0.45 : r * 0.16}
+            label={seatLabel(m)}
+            disabled={state !== "available" && state !== "selected"}
+            onClick={guardClick(() => event && onToggle(event.eventSeatSeq))}
+          />
+        );
+      })}
+    </MapCanvas>
+  );
+}
