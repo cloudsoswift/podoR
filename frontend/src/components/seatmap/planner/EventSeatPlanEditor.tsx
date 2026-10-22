@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
-import { rowLabel } from "@/components/seatmap/core/seatGeometry";
+import { rowLabelsByGridRow } from "@/components/seatmap/core/seatGeometry";
 import { Section } from "@/components/seatmap/core/types";
 import { Seat } from "@/components/seatmap/core/seatTypes";
 import { GradeItem, SeatKey, SeatPlanResponse, saveSeatPlan } from "@/lib/api/seatPlan";
@@ -58,8 +58,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
     const out: SeatInfo[] = [];
     for (const sec of sections) {
       const secSeats = seatsBySection[sec.id] ?? [];
-      const rowsPresent = [...new Set(secSeats.map((s) => s.gridRow))].sort((a, b) => a - b);
-      const labelByRow = new Map(rowsPresent.map((gr, i) => [gr, rowLabel(i)]));
+      const labelByRow = rowLabelsByGridRow(secSeats);
       for (const s of secSeats) {
         out.push({
           x: s.x,
