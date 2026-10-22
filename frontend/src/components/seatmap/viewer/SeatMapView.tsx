@@ -4,8 +4,8 @@ import { useMemo } from "react";
 import MapCanvas from "@/components/seatmap/core/MapCanvas";
 import SeatDot from "@/components/seatmap/core/SeatDot";
 import SectionOutline from "@/components/seatmap/core/SectionOutline";
-import { boundsOf, pitchFromSeats, polygonOf, seatRadius } from "@/components/seatmap/core/seatGeometry";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { boundsOf, polygonOf, seatRadiusFor } from "@/components/seatmap/core/seatGeometry";
+import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
 import { Section } from "@/components/seatmap/core/types";
 import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 import { fitView } from "@/components/seatmap/core/viewport";
@@ -16,6 +16,8 @@ import { useClickOrPan } from "./useClickOrPan";
 interface Props {
   section: Section;
   layoutSeats: Seat[];
+  // 좌석을 만든 간격(layoutJson 의 gridBySection). 이전 문서는 없다.
+  grid?: GridConfig;
   // 이 섹션의 회차 좌석.
   eventSeats: SeatViewSeat[];
   held: Set<number>;
@@ -27,6 +29,7 @@ interface Props {
 export default function SeatMapView({
   section,
   layoutSeats,
+  grid,
   eventSeats,
   held,
   selected,
@@ -40,10 +43,7 @@ export default function SeatMapView({
     () => matchSectionSeats(layoutSeats, eventSeats),
     [layoutSeats, eventSeats],
   );
-  const r = useMemo(() => {
-    const p = pitchFromSeats(layoutSeats);
-    return seatRadius(p, p);
-  }, [layoutSeats]);
+  const r = useMemo(() => seatRadiusFor(grid, layoutSeats), [grid, layoutSeats]);
 
   return (
     <MapCanvas pz={pz} cursor={pz.panning ? "grabbing" : "grab"} svgProps={svgProps}>

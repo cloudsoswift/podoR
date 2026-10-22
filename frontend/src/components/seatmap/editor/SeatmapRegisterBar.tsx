@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { AxiosError } from "axios";
 import { Section } from "@/components/seatmap/core/types";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
 import {
   buildSeatmapPayload,
   findDuplicateSectionNames,
@@ -14,6 +14,7 @@ interface Props {
   venueSeq: number;
   sections: Section[];
   seatsBySection: Record<string, Seat[]>;
+  gridBySection: Record<string, GridConfig>;
 }
 
 type Status =
@@ -26,13 +27,18 @@ type Status =
  * 섹션 배치 + 좌석을 하나의 JSON 으로 합쳐 백엔드에 저장(upsert)하는 상단 바.
  * venue 는 URL 로 특정되므로 prop 으로 받는다. POST /venues/{venueSeq}/seatmap.
  */
-export default function SeatmapRegisterBar({ venueSeq, sections, seatsBySection }: Props) {
+export default function SeatmapRegisterBar({
+  venueSeq,
+  sections,
+  seatsBySection,
+  gridBySection,
+}: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [showJson, setShowJson] = useState(false);
 
   const payload = useMemo(
-    () => buildSeatmapPayload(sections, seatsBySection),
-    [sections, seatsBySection],
+    () => buildSeatmapPayload(sections, seatsBySection, gridBySection),
+    [sections, seatsBySection, gridBySection],
   );
   const combinedJson = useMemo(
     () => JSON.stringify(payload, null, 2),

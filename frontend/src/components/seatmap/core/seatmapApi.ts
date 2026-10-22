@@ -1,6 +1,6 @@
 import apiClient from "@/lib/axios";
 import { Section } from "./types";
-import { Seat } from "./seatTypes";
+import { GridConfig, Seat } from "./seatTypes";
 import { allSeatsForSave } from "./seatGeometry";
 
 // 백엔드 좌석 1건. (Seat 엔티티: section/row_number/seat_number/is_available)
@@ -30,6 +30,8 @@ export interface SeatmapDoc {
   version: 1;
   sections: Section[];
   seatsBySection: Record<string, Seat[]>;
+  // 섹션별 좌석을 만든 격자 간격. 좌석 반지름·에디터 재진입 복원용. 이전 문서엔 없다.
+  gridBySection?: Record<string, GridConfig>;
 }
 
 /**
@@ -52,6 +54,7 @@ export function findDuplicateSectionNames(sections: Section[]): string[] {
 export function buildSeatmapPayload(
   sections: Section[],
   seatsBySection: Record<string, Seat[]>,
+  gridBySection: Record<string, GridConfig> = {},
 ): SeatmapPayload {
   const nameById = new Map(sections.map((s) => [s.id, s.name]));
   const seats: SeatmapSeatItem[] = [];
@@ -67,7 +70,7 @@ export function buildSeatmapPayload(
       });
     }
   }
-  const doc: SeatmapDoc = { version: 1, sections, seatsBySection };
+  const doc: SeatmapDoc = { version: 1, sections, seatsBySection, gridBySection };
   return { layoutJson: JSON.stringify(doc), seats };
 }
 
@@ -100,31 +103,30 @@ export async function getVenueLayout(venueSeq: number): Promise<string | null> {
 
 /**
  * layoutJson 을 에디터 상태로 파싱한다.
- * - 새 포맷({ version, sections, seatsBySection }) → 섹션+좌석 복원.
+ * - 새 포맷({ version, sections, seatsBySection, gridBySection? }) → 섹션+좌석+간격 복원.
  * - 레거시(바로 Section[] 배열) → 섹션만 복원, 좌석은 빈 값.
  * - null/파싱 실패 → 빈 에디터.
  */
-export function parseSeatmapDoc(layoutJson: string | null): {
-  sections: Section[];
-  seatsBySection: Record<string, Seat[]>;
-} {
-  if (!layoutJson) return { sections: [], seatsBySection: {} };
+export function parseSeatmapDoc(layoutJson: string | null): Required<Omit<SeatmapDoc, "version">> {
+  const empty = { sections: [], seatsBySection: {}, gridBySection: {} };
+  if (!layoutJson) return empty;
   let parsed: unknown;
   try {
     parsed = JSON.parse(layoutJson);
   } catch {
-    return { sections: [], seatsBySection: {} };
+    return empty;
   }
   if (Array.isArray(parsed)) {
     // 레거시: layoutJson 이 Section[] 배열이던 시절.
-    return { sections: parsed as Section[], seatsBySection: {} };
+    return { ...empty, sections: parsed as Section[] };
   }
   if (parsed && typeof parsed === "object" && "sections" in parsed) {
     const doc = parsed as Partial<SeatmapDoc>;
     return {
       sections: doc.sections ?? [],
       seatsBySection: doc.seatsBySection ?? {},
+      gridBySection: doc.gridBySection ?? {},
     };
   }
-  return { sections: [], seatsBySection: {} };
+  return empty;
 }

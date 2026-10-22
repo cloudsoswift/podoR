@@ -84,7 +84,7 @@ export function seatRadius(colPitch: number, rowPitch: number): number {
 }
 
 /**
- * 좌석 좌표만으로 간격을 추정한다(저장 문서에는 격자 설정이 없다).
+ * 좌석 좌표만으로 간격을 추정한다(간격이 저장되지 않은 이전버전 JSON용).
  * 각 좌석의 최근접 이웃 거리 중 최솟값.
  */
 export function pitchFromSeats(seats: Point[]): number {
@@ -96,6 +96,13 @@ export function pitchFromSeats(seats: Point[]): number {
     }
   }
   return Number.isFinite(best) ? best : DEFAULT_PITCH;
+}
+
+/** 좌석을 만든 간격으로 반지름을 구한다. 간격이 없는 이전버전 JSON은 좌표로 추정한다. */
+export function seatRadiusFor(grid: GridConfig | null | undefined, seats: Point[]): number {
+  if (grid) return seatRadius(grid.colPitch, grid.rowPitch);
+  const p = pitchFromSeats(seats);
+  return seatRadius(p, p);
 }
 
 /**

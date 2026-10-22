@@ -26,7 +26,8 @@ export interface SeatEditorState {
   seats: Seat[];
   selectedIds: string[]; // 마퀴/클릭으로 선택된 좌석
   tool: SeatTool;
-  grid: GridConfig;
+  grid: GridConfig; // 툴바 입력값(다음 생성에 쓸 간격)
+  seatGrid: GridConfig | null; // 현재 좌석을 만든 간격. 저장·반지름용. 모르면 null
 }
 
 export function createInitialState(
@@ -38,6 +39,7 @@ export function createInitialState(
     selectedIds: [],
     tool: "select",
     grid: DEFAULT_GRID,
+    seatGrid: null,
   };
 }
 
@@ -66,11 +68,12 @@ export function seatEditorReducer(
       return {
         ...state,
         seats: generateSeats(state.section, state.grid),
+        seatGrid: state.grid,
         selectedIds: [],
       };
 
     case "CLEAR_SEATS":
-      return { ...state, seats: [], selectedIds: [] };
+      return { ...state, seats: [], seatGrid: null, selectedIds: [] };
 
     case "SET_SELECTION":
       return { ...state, selectedIds: Array.from(new Set(action.ids)) };
@@ -93,7 +96,7 @@ export function seatEditorReducer(
       };
 
     case "SET_SECTION":
-      return { ...state, section: action.section, seats: [], selectedIds: [] };
+      return { ...state, section: action.section, seats: [], seatGrid: null, selectedIds: [] };
 
     default:
       return state;

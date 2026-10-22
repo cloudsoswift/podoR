@@ -4,6 +4,7 @@ import {
   pitchFromSeats,
   rowLabelsByGridRow,
   seatRadius,
+  seatRadiusFor,
 } from "../seatGeometry";
 import { Seat } from "../seatTypes";
 
@@ -43,4 +44,10 @@ test("pitchFromSeats 는 최근접 거리 최솟값, 좌석 1개 이하면 DEFAU
   ).toBe(12);
   expect(pitchFromSeats([{ x: 5, y: 5 }])).toBe(DEFAULT_PITCH);
   expect(pitchFromSeats([])).toBe(DEFAULT_PITCH);
+});
+
+test("seatRadiusFor: 저장된 간격이 있으면 그것으로, 없으면 좌표로 추정한 간격으로 계산한다", () => {
+  const seats = [{ x: 0, y: 0 }, { x: 10, y: 0 }];
+  expect(seatRadiusFor({ colPitch: 25, rowPitch: 30 }, seats)).toBe(seatRadius(25, 30));
+  expect(seatRadiusFor(undefined, seats)).toBe(seatRadius(10, 10));
 });

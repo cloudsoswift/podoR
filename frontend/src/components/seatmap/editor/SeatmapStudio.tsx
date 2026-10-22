@@ -5,7 +5,7 @@ import SectionEditor from "./SectionEditor";
 import SeatEditor from "./SeatEditor";
 import SeatmapRegisterBar from "./SeatmapRegisterBar";
 import { Section } from "@/components/seatmap/core/types";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
 import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
 
 interface Props {
@@ -21,6 +21,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
   const [editing, setEditing] = useState<Section | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [seatsBySection, setSeatsBySection] = useState<Record<string, Seat[]>>({});
+  const [gridBySection, setGridBySection] = useState<Record<string, GridConfig>>({});
   const [initialSections, setInitialSections] = useState<Section[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
         if (!alive) return;
         const doc = parseSeatmapDoc(layoutJson);
         setSeatsBySection(doc.seatsBySection);
+        setGridBySection(doc.gridBySection);
         setInitialSections(doc.sections);
       } catch {
         if (alive) setError("좌석맵을 불러오지 못했습니다.");
@@ -58,9 +60,16 @@ export default function SeatmapStudio({ venueSeq }: Props) {
     setEditing(section);
   }
 
-  function handleExit(seats: Seat[]) {
+  function handleExit(seats: Seat[], grid: GridConfig | null) {
     if (editing) {
-      setSeatsBySection((prev) => ({ ...prev, [editing.id]: seats }));
+      const id = editing.id;
+      setSeatsBySection((prev) => ({ ...prev, [id]: seats }));
+      setGridBySection((prev) => {
+        const next = { ...prev };
+        if (grid) next[id] = grid;
+        else delete next[id];
+        return next;
+      });
     }
     setEditing(null);
   }
@@ -86,6 +95,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
         venueSeq={venueSeq}
         sections={sections}
         seatsBySection={seatsBySection}
+        gridBySection={gridBySection}
       />
       <div className="min-h-0 flex-1">
         <div className={editing ? "hidden" : "h-full"}>
@@ -101,6 +111,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
               key={editing.id}
               section={editing}
               initialSeats={seatsBySection[editing.id]}
+              initialGrid={gridBySection[editing.id]}
               onExit={handleExit}
             />
           </div>

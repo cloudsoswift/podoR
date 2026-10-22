@@ -52,10 +52,13 @@ const seat = (seq: number, seatNumber: number, status: SeatViewSeat["status"] = 
 const seats = [seat(1, 1), seat(2, 2), seat(3, 3)];
 
 /** 훅 반환값 설정. refresh 는 호출 검증용 jest.fn. */
-function setupPolling(refresh = jest.fn(), opts: { seats?: SeatViewSeat[]; heldSeats?: number[] } = {}) {
+function setupPolling(
+  refresh = jest.fn(),
+  opts: { seats?: SeatViewSeat[]; heldSeats?: number[]; layoutJson?: string } = {},
+) {
   mockedPolling.mockReturnValue({
     seats: opts.seats ?? seats,
-    layoutJson,
+    layoutJson: opts.layoutJson ?? layoutJson,
     heldSeats: opts.heldSeats ?? [],
     loading: false,
     refresh,
@@ -346,4 +349,21 @@ test("지도 밖에서 버튼을 뗀 뒤 버튼 없이 움직이면 팬하지 �
   fireEvent.pointerDown(seatButton("A열 1번 · VIP"), { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
   fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, buttons: 0, pointerId: 1 });
   expect(svg).toHaveStyle({ cursor: "grab" });
+});
+
+test("좌석 반지름은 layoutJson 에 저장된 간격으로 계산한다", async () => {
+  const user = userEvent.setup();
+  const withGrid = JSON.stringify({
+    ...JSON.parse(layoutJson),
+    gridBySection: { s1: { colPitch: 25, rowPitch: 30 } },
+  });
+  setupPolling(jest.fn(), { layoutJson: withGrid });
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  // 좌표로 추정하면 간격 20 → 반지름 8, 저장된 간격(25,30)이면 min(25,30)*0.4 = 10.
+  expect(seatButton("A열 1번 · VIP")).toHaveAttribute("r", "10");
 });

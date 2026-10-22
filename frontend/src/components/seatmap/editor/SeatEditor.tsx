@@ -6,7 +6,7 @@ import {
   seatEditorReducer,
 } from "./seatEditorReducer";
 import { Section } from "@/components/seatmap/core/types";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
 import SeatCanvas from "./SeatCanvas";
 import SeatToolbar from "./SeatToolbar";
 import SeatJsonPanel from "./SeatJsonPanel";
@@ -16,14 +16,22 @@ interface Props {
   section?: Section;
   // 통합 화면에서 이미 만들어 둔 좌석을 이어서 편집할 때 주입한다.
   initialSeats?: Seat[];
-  // 섹션 에디터로 돌아갈 때 현재 좌석을 넘겨 보존시킨다.
-  onExit?: (seats: Seat[]) => void;
+  // initialSeats 를 만든 간격. 이전 문서처럼 없으면 기본 간격으로 시작한다.
+  initialGrid?: GridConfig;
+  // 섹션 에디터로 돌아갈 때 현재 좌석과 그 좌석을 만든 간격을 넘겨 보존시킨다.
+  onExit?: (seats: Seat[], grid: GridConfig | null) => void;
 }
 
-export default function SeatEditor({ section, initialSeats, onExit }: Props) {
+export default function SeatEditor({ section, initialSeats, initialGrid, onExit }: Props) {
   const [state, dispatch] = useReducer(seatEditorReducer, undefined, () => {
     const base = createInitialState(section);
-    return initialSeats ? { ...base, seats: initialSeats } : base;
+    if (!initialSeats) return base;
+    return {
+      ...base,
+      seats: initialSeats,
+      grid: initialGrid ?? base.grid,
+      seatGrid: initialGrid ?? null,
+    };
   });
 
   // Delete: 선택 좌석을 '사용 안 함'으로 / Esc: 선택 해제.
@@ -50,7 +58,7 @@ export default function SeatEditor({ section, initialSeats, onExit }: Props) {
       <SeatToolbar
         state={state}
         dispatch={dispatch}
-        onExit={onExit ? () => onExit(state.seats) : undefined}
+        onExit={onExit ? () => onExit(state.seats, state.seatGrid) : undefined}
       />
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 overflow-hidden p-4">

@@ -160,6 +160,7 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
           <SeatMapView
             section={currentSection}
             layoutSeats={doc.seatsBySection[currentSection.id] ?? []}
+            grid={doc.gridBySection[currentSection.id]}
             eventSeats={sectionSeats}
             held={heldSet}
             selected={selected}

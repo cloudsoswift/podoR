@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { rowLabelsByGridRow, seatRadius } from "@/components/seatmap/core/seatGeometry";
+import { useMemo, useRef, useState } from "react";
+import { rowLabelsByGridRow, seatRadiusFor } from "@/components/seatmap/core/seatGeometry";
 import { SeatEditorAction, SeatEditorState } from "./seatEditorReducer";
 import { Point } from "@/components/seatmap/core/types";
 import { Seat } from "@/components/seatmap/core/seatTypes";
@@ -24,8 +24,12 @@ export default function SeatCanvas({ state, dispatch }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [marquee, setMarquee] = useState<{ a: Point; b: Point } | null>(null);
 
-  // 좌석 반지름은 콘텐츠 단위(간격에서 유도). 줌하면 간격과 함께 스케일되어 보기 일정.
-  const seatR = seatRadius(state.grid.colPitch, state.grid.rowPitch);
+  // 좌석 반지름은 콘텐츠 단위(좌석을 만든 간격에서 유도). 줌하면 간격과 함께 스케일되어 보기 일정.
+  // 툴바 간격만 바꾸고 재생성하지 않으면 좌석 크기는 그대로다.
+  const seatR = useMemo(
+    () => seatRadiusFor(state.seatGrid, state.seats),
+    [state.seatGrid, state.seats],
+  );
 
   /** 콘텐츠 좌표에서 가장 가까운(히트 반경 내) 좌석. */
   function seatAt(p: Point): Seat | null {
