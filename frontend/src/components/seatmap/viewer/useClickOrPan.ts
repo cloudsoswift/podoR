@@ -21,6 +21,11 @@ export function useClickOrPan(pz: PanZoom) {
     if (pz.updatePan(e)) return;
     const start = startRef.current;
     if (!start) return;
+    // 지도 밖에서 버튼을 떼 pointerup 을 못 받았으면 남은 시작점을 버린다.
+    if (e.buttons === 0) {
+      startRef.current = null;
+      return;
+    }
     if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_SLOP) {
       startRef.current = null;
       suppressClickRef.current = true;
@@ -28,6 +33,7 @@ export function useClickOrPan(pz: PanZoom) {
     }
   }
 
+  // pointercancel(브라우저가 포인터를 가져감)도 pointerup 과 같이 끝낸다.
   function onPointerUp(e: React.PointerEvent) {
     startRef.current = null;
     pz.endPan(e);
@@ -46,7 +52,13 @@ export function useClickOrPan(pz: PanZoom) {
   }
 
   return {
-    svgProps: { onPointerDown, onPointerMove, onPointerUp, onKeyDownCapture },
+    svgProps: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel: onPointerUp,
+      onKeyDownCapture,
+    },
     guardClick,
   };
 }

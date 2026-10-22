@@ -319,6 +319,8 @@ export default function EditorCanvas({ state, dispatch }: Props) {
         onPointerDown: handleBackgroundPointerDown,
         onPointerMove: handlePointerMove,
         onPointerUp: handlePointerUp,
+        // 드래그 중 반영된 이동은 그대로 두고 드래그만 끝낸다.
+        onPointerCancel: handlePointerUp,
         onPointerLeave: () => {
           if (state.tool === "pen") dispatch({ type: "SET_CURSOR", point: null });
         },

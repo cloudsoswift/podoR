@@ -14,18 +14,6 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }))
 
 const mockedPolling = useSeatViewPolling as jest.MockedFunction<typeof useSeatViewPolling>;
 
-// jsdom 에는 PointerEvent 가 없어 fireEvent.pointer* 의 clientX 가 버려진다(드래그 판정 테스트용).
-if (!window.PointerEvent) {
-  class PointerEventPolyfill extends MouseEvent {
-    pointerId: number;
-    constructor(type: string, init: PointerEventInit = {}) {
-      super(type, init);
-      this.pointerId = init.pointerId ?? 0;
-    }
-  }
-  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
-}
-
 const SECTION = "A구역";
 // 에디터가 저장하는 SeatmapDoc: 사각형 섹션 1개 + 1행 4석(4번은 에디터에서 '사용 안 함').
 const anchor = (id: string, x: number, y: number) => ({ id, x, y, handleIn: null, handleOut: null });
@@ -313,7 +301,7 @@ test("드래그로 팬한 뒤에는 좌석이 선택되지 않는다", async () 
   const target = seatButton("A열 1번 · VIP");
   const svg = container.querySelector("svg")!;
   fireEvent.pointerDown(target, { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
-  fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, pointerId: 1 });
+  fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, buttons: 1, pointerId: 1 });
   fireEvent.pointerUp(svg, { clientX: 50, clientY: 0, pointerId: 1 });
   fireEvent.click(target);
 
@@ -323,4 +311,39 @@ test("드래그로 팬한 뒤에는 좌석이 선택되지 않는다", async () 
   target.focus();
   await user.keyboard("{Enter}");
   expect(screen.getByText("선택 1석")).toBeInTheDocument();
+});
+
+test("pointercancel 이 오면 팬이 끝난다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  const { container } = render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  const svg = container.querySelector("svg")!;
+  fireEvent.pointerDown(seatButton("A열 1번 · VIP"), { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
+  fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, buttons: 1, pointerId: 1 });
+  expect(svg).toHaveStyle({ cursor: "grabbing" });
+
+  // 브라우저가 포인터를 가져가면(터치 스크롤 등) pointerup 대신 pointercancel 이 온다.
+  fireEvent.pointerCancel(svg, { pointerId: 1 });
+  expect(svg).toHaveStyle({ cursor: "grab" });
+});
+
+test("지도 밖에서 버튼을 뗀 뒤 버튼 없이 움직이면 팬하지 않는다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  const { container } = render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  const svg = container.querySelector("svg")!;
+  // pointerdown 후 지도 밖에서 떼면 svg 는 pointerup 을 받지 못한다.
+  fireEvent.pointerDown(seatButton("A열 1번 · VIP"), { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
+  fireEvent.pointerMove(svg, { clientX: 50, clientY: 0, buttons: 0, pointerId: 1 });
+  expect(svg).toHaveStyle({ cursor: "grab" });
 });

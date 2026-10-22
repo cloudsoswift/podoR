@@ -109,6 +109,15 @@ export default function SeatCanvas({ state, dispatch }: Props) {
     setMarquee(null);
   }
 
+  // pointercancel: 클릭/마퀴 선택을 확정하지 않고 드래그만 버린다.
+  function handlePointerCancel(e: React.PointerEvent) {
+    if (pz.endPan(e)) return;
+    if (!dragRef.current) return;
+    svgRef.current?.releasePointerCapture(e.pointerId);
+    dragRef.current = null;
+    setMarquee(null);
+  }
+
   const sel = new Set(state.selectedIds);
   const svgCursor =
     state.tool === "pan" ? (pz.panning ? "grabbing" : "grab") : "default";
@@ -161,6 +170,7 @@ export default function SeatCanvas({ state, dispatch }: Props) {
         onPointerDown: handlePointerDown,
         onPointerMove: handlePointerMove,
         onPointerUp: handlePointerUp,
+        onPointerCancel: handlePointerCancel,
         onPointerLeave: () => setHoveredId(null),
       }}
       overlay={overlay}
