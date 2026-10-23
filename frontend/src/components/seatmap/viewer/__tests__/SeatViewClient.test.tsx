@@ -17,14 +17,21 @@ const mockedPolling = useSeatViewPolling as jest.MockedFunction<typeof useSeatVi
 const SECTION = "A구역";
 // 에디터가 저장하는 SeatmapDoc: 사각형 섹션 1개 + 1행 4석(4번은 에디터에서 '사용 안 함').
 const anchor = (id: string, x: number, y: number) => ({ id, x, y, handleIn: null, handleOut: null });
-const layoutSeat = (number: number, available = true) => ({
-  id: `seat-${number}`,
-  x: number * 20,
-  y: 20,
-  gridRow: 0,
-  number,
-  available,
-});
+// 줄 단위 배치: 줄 A 4석(x 20·40·60·80), 4번은 에디터에서 '사용 안 함'.
+const layoutRow = {
+  id: "row-a",
+  name: "A",
+  seatCount: 4,
+  center: { x: 50, y: 20 },
+  rotation: 0,
+  spacing: 20,
+  seatRadius: 8,
+  arcAngle: 0,
+  startNumber: 1,
+  numberDirection: "forward",
+  skipUnavailableNumbers: false,
+  unavailable: [3],
+};
 const layoutJson = JSON.stringify({
   version: 1,
   sections: [
@@ -35,7 +42,7 @@ const layoutJson = JSON.stringify({
       anchors: [anchor("a1", 0, 0), anchor("a2", 100, 0), anchor("a3", 100, 40), anchor("a4", 0, 40)],
     },
   ],
-  seatsBySection: { s1: [layoutSeat(1), layoutSeat(2), layoutSeat(3), layoutSeat(4, false)] },
+  rowsBySection: { s1: [layoutRow] },
 });
 
 const seat = (seq: number, seatNumber: number, status: SeatViewSeat["status"] = "AVAILABLE"): SeatViewSeat => ({
@@ -351,21 +358,56 @@ test("지도 밖에서 버튼을 뗀 뒤 버튼 없이 움직이면 팬하지 �
   expect(svg).toHaveStyle({ cursor: "grab" });
 });
 
-test("좌석 반지름은 layoutJson 에 저장된 간격으로 계산한다", async () => {
+test("좌석 반지름은 줄에 저장된 좌석 크기를 쓴다", async () => {
   const user = userEvent.setup();
-  const withGrid = JSON.stringify({
+  const withRadius = JSON.stringify({
     ...JSON.parse(layoutJson),
-    gridBySection: { s1: { colPitch: 25, rowPitch: 30 } },
+    rowsBySection: { s1: [{ ...layoutRow, seatRadius: 10 }] },
   });
-  setupPolling(jest.fn(), { layoutJson: withGrid });
+  setupPolling(jest.fn(), { layoutJson: withRadius });
   stubQuota(0, 4);
 
   render(<SeatViewClient eventId="E1" />);
   await screen.findByText("현재 0 / 4");
   await user.click(screen.getByRole("button", { name: /A구역/ }));
 
-  // 좌표로 추정하면 간격 20 → 반지름 8, 저장된 간격(25,30)이면 min(25,30)*0.4 = 10.
   expect(seatButton("A열 1번 · VIP")).toHaveAttribute("r", "10");
+});
+
+test("좌석이 작으면 손가락으로 누를 수 있는 크기까지 확대해서 시작한다", async () => {
+  const user = userEvent.setup();
+  // 화면 300×210px → 콘텐츠 1단위 = 0.3px. 섹션 900×600 은 fit 배율 약 102%.
+  const original = window.ResizeObserver;
+  window.ResizeObserver = class {
+    constructor(private cb: ResizeObserverCallback) {}
+    observe() {
+      this.cb([{ contentRect: { width: 300, height: 210 } } as ResizeObserverEntry], this as never);
+    }
+    unobserve() {}
+    disconnect() {}
+  };
+  const big = JSON.stringify({
+    version: 1,
+    sections: [
+      {
+        id: "s1",
+        name: SECTION,
+        color: "#000000",
+        anchors: [anchor("a1", 0, 0), anchor("a2", 900, 0), anchor("a3", 900, 600), anchor("a4", 0, 600)],
+      },
+    ],
+    rowsBySection: { s1: [{ ...layoutRow, seatRadius: 2 }] },
+  });
+  setupPolling(jest.fn(), { layoutJson: big });
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+
+  // 지름 4 × 0.3px = 1.2px → 24px 이 되려면 20배 → 최대 줌 800%.
+  expect(screen.getByTitle("뷰 초기화")).toHaveTextContent("800%");
+  window.ResizeObserver = original;
 });
 
 test("결제 바에서 선택 좌석 목록을 펼쳐 섹션 맵에서도 확인·취소할 수 있다", async () => {

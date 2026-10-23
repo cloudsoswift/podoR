@@ -48,3 +48,28 @@ export function fitView(b: Bounds, pad = 40): View {
 export function viewTransform(v: View): string {
   return `translate(${v.tx} ${v.ty}) scale(${v.z})`;
 }
+
+/** 현재 화면 중앙의 콘텐츠 좌표. */
+export function viewCenter(v: View): Point {
+  return { x: (VIEW_W / 2 - v.tx) / v.z, y: (VIEW_H / 2 - v.ty) / v.z };
+}
+
+// 손가락으로 누를 수 있는 최소 좌석 지름(화면 px).
+export const MIN_SEAT_DIAMETER_PX = 24;
+
+/**
+ * 가장 작은 좌석의 화면상 지름(2·minSeatRadius·pxPerUnit·z)이 minDiameterPx 보다 작으면
+ * anchor(루트 좌표)를 고정점으로 그만큼 확대한다. pxPerUnit 은 줌 1 에서 콘텐츠 1단위의 화면 px(모르면 0).
+ */
+export function ensureMinSeatSize(
+  v: View,
+  minSeatRadius: number,
+  pxPerUnit: number,
+  anchor: Point,
+  minDiameterPx = MIN_SEAT_DIAMETER_PX,
+): View {
+  if (pxPerUnit <= 0 || minSeatRadius <= 0) return v;
+  const diameter = 2 * minSeatRadius * pxPerUnit * v.z;
+  if (diameter >= minDiameterPx) return v;
+  return zoomAround(v, minDiameterPx / diameter, anchor);
+}

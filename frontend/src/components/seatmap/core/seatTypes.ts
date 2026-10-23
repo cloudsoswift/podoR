@@ -1,21 +1,36 @@
-// 좌석 에디터 전용 타입.
-// 섹션을 격자로 가득 채워 좌석을 만든 뒤, 사용하지 않을 좌석을 표시(available=false)한다.
-// 저장 시에는 available 좌석만 내보낸다.
+import { Point } from "./types";
 
-export interface Seat {
+// ── 줄(row) 단위 좌석 모델 ──
+// 줄만 저장하고 좌석 좌표·반지름·번호는 rowGeometry 의 순수 함수로 계산한다.
+
+// forward = 첫 좌석(인덱스 0)부터, reverse = 끝 좌석부터 번호를 매긴다.
+export type NumberDirection = "forward" | "reverse";
+
+// row = 줄 선택·이동·편집, seat = 좌석 사용 여부 표시.
+export type RowEditorMode = "row" | "seat";
+
+export interface SeatRow {
   id: string;
-  x: number; // 콘텐츠 좌표(섹션과 동일한 1000×700 공간)
+  name: string; // 줄 이름. 새 줄은 ""
+  seatCount: number; // ≥ 1
+  center: Point; // 첫·끝 좌석 중심을 잇는 현의 중점(콘텐츠 좌표)
+  rotation: number; // 도, SVG 기준 시계 방향
+  spacing: number; // 이웃 좌석 사이 경로 길이(곡선이면 호 길이)
+  seatRadius: number;
+  arcAngle: number; // 도. 0 = 직선, 양수 = 로컬 −y(위)로 볼록
+  startNumber: number;
+  numberDirection: NumberDirection;
+  skipUnavailableNumbers: boolean; // 사용 안 함 좌석은 번호를 받지 않음
+  unavailable: number[]; // 사용 안 함 좌석 인덱스(0 = 첫 좌석)
+}
+
+// 줄에서 계산한 좌석 하나.
+export interface RowSeat {
+  rowId: string;
+  index: number;
+  x: number;
   y: number;
-  gridRow: number; // 0-based 행 인덱스(위→아래). 행 정체성/압축 정렬용.
-  number: number; // 같은 행 내 좌석 번호(생성 시 1..k). 미사용 좌석으로 결번이 생길 수 있다.
-  available: boolean; // true=사용(저장 대상), false=사용 안 함
+  r: number;
+  available: boolean;
+  number: number | null; // 건너뛰기 켬 + 사용 안 함이면 null
 }
-
-// 격자 생성 파라미터. 섹션 바운딩 박스를 간격(pitch)에 맞춰 가득 채운다.
-export interface GridConfig {
-  colPitch: number; // 같은 행 내 좌석 중심 간 가로 간격(px)
-  rowPitch: number; // 행 간 세로 간격(px)
-}
-
-// pan=화면 이동, select=좌석 클릭/드래그로 사용·미사용 표시.
-export type SeatTool = "pan" | "select";

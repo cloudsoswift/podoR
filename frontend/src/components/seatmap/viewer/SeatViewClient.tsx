@@ -161,8 +161,7 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
         <div className="h-[70vh] overflow-hidden rounded-xl border border-gray-200">
           <SeatMapView
             section={currentSection}
-            layoutSeats={doc.seatsBySection[currentSection.id] ?? []}
-            grid={doc.gridBySection[currentSection.id]}
+            rows={doc.rowsBySection[currentSection.id] ?? []}
             eventSeats={sectionSeats}
             held={heldSet}
             selected={selected}

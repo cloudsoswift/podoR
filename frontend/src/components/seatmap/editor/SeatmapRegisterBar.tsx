@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { AxiosError } from "axios";
 import { Section } from "@/components/seatmap/core/types";
-import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
+import { SeatRow } from "@/components/seatmap/core/seatTypes";
+import { validateLayout } from "@/components/seatmap/core/layoutValidation";
 import {
   buildSeatmapPayload,
   findDuplicateSectionNames,
@@ -13,8 +14,7 @@ import {
 interface Props {
   venueSeq: number;
   sections: Section[];
-  seatsBySection: Record<string, Seat[]>;
-  gridBySection: Record<string, GridConfig>;
+  rowsBySection: Record<string, SeatRow[]>;
 }
 
 type Status =
@@ -30,15 +30,14 @@ type Status =
 export default function SeatmapRegisterBar({
   venueSeq,
   sections,
-  seatsBySection,
-  gridBySection,
+  rowsBySection,
 }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [showJson, setShowJson] = useState(false);
 
   const payload = useMemo(
-    () => buildSeatmapPayload(sections, seatsBySection, gridBySection),
-    [sections, seatsBySection, gridBySection],
+    () => buildSeatmapPayload(sections, rowsBySection),
+    [sections, rowsBySection],
   );
   const combinedJson = useMemo(
     () => JSON.stringify(payload, null, 2),
@@ -51,9 +50,13 @@ export default function SeatmapRegisterBar({
   );
   const hasDuplicateNames = duplicateNames.length > 0;
 
-  const canSubmit = status.kind !== "loading" && !hasDuplicateNames;
+  // 이름 없는 줄·번호 중복·좌석 겹침·섹션 밖 좌석·섹션 겹침이 있으면 저장하지 않는다.
+  const problems = useMemo(() => validateLayout(sections, rowsBySection), [sections, rowsBySection]);
+
+  const canSubmit = status.kind !== "loading" && !hasDuplicateNames && problems.length === 0;
 
   async function handleRegister() {
+    if (problems.length > 0) return;
     if (hasDuplicateNames) {
       setStatus({
         kind: "error",
@@ -125,6 +128,14 @@ export default function SeatmapRegisterBar({
           </span>
         )}
       </div>
+
+      {problems.length > 0 && (
+        <ul className="border-t border-gray-100 px-4 py-2 text-xs text-red-600">
+          {problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      )}
 
       {showJson && (
         <div className="border-t border-gray-100 px-4 py-2">

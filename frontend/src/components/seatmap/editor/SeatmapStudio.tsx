@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import SectionEditor from "./SectionEditor";
-import SeatEditor from "./SeatEditor";
+import RowEditor from "./RowEditor";
 import SeatmapRegisterBar from "./SeatmapRegisterBar";
-import { Section } from "@/components/seatmap/core/types";
-import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
+import { BackgroundImage, Section } from "@/components/seatmap/core/types";
+import { SeatRow } from "@/components/seatmap/core/seatTypes";
+import { translateRows } from "@/components/seatmap/core/rowGeometry";
 import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
 
 interface Props {
@@ -13,15 +14,16 @@ interface Props {
 }
 
 /**
- * 섹션 에디터와 좌석 에디터를 한 화면에서 오가는 통합 컨테이너.
- * 진입 시 해당 venue 의 저장된 좌석맵(layoutJson)을 불러와 섹션+좌석을 복원한다.
- * 상단 바에서 섹션 배치 + 좌석을 하나의 JSON 으로 합쳐 백엔드에 저장한다.
+ * 섹션 에디터와 줄 에디터를 한 화면에서 오가는 통합 컨테이너.
+ * 진입 시 해당 venue 의 저장된 좌석맵(layoutJson)을 불러와 섹션+줄을 복원한다.
+ * 섹션 에디터의 밑그림을 줄 에디터에도 보여 주고, 섹션을 옮기면 그 섹션의 줄도 함께 옮긴다.
+ * 상단 바에서 섹션 배치 + 줄을 하나의 JSON 으로 합쳐 백엔드에 저장한다.
  */
 export default function SeatmapStudio({ venueSeq }: Props) {
   const [editing, setEditing] = useState<Section | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
-  const [seatsBySection, setSeatsBySection] = useState<Record<string, Seat[]>>({});
-  const [gridBySection, setGridBySection] = useState<Record<string, GridConfig>>({});
+  const [rowsBySection, setRowsBySection] = useState<Record<string, SeatRow[]>>({});
+  const [background, setBackground] = useState<BackgroundImage | null>(null);
   const [initialSections, setInitialSections] = useState<Section[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +38,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
         const layoutJson = await getVenueLayout(venueSeq);
         if (!alive) return;
         const doc = parseSeatmapDoc(layoutJson);
-        setSeatsBySection(doc.seatsBySection);
-        setGridBySection(doc.gridBySection);
+        setRowsBySection(doc.rowsBySection);
         setInitialSections(doc.sections);
       } catch {
         if (alive) setError("좌석맵을 불러오지 못했습니다.");
@@ -56,20 +57,30 @@ export default function SeatmapStudio({ venueSeq }: Props) {
     setSections(next);
   }, []);
 
+  // 섹션 평행 이동을 그 섹션의 줄에도 반영한다(모양 편집은 따라가지 않음).
+  const handleSectionMove = useCallback((id: string, dx: number, dy: number) => {
+    setRowsBySection((prev) =>
+      prev[id] ? { ...prev, [id]: translateRows(prev[id], null, dx, dy) } : prev,
+    );
+  }, []);
+
+  // 편집 중인 섹션의 줄을 실시간으로 반영한다(상단 저장 바가 최신 줄로 검증·저장).
+  const editingId = editing?.id;
+  const handleRowsChange = useCallback(
+    (rows: SeatRow[]) => {
+      if (editingId) setRowsBySection((prev) => ({ ...prev, [editingId]: rows }));
+    },
+    [editingId],
+  );
+
   function handleEditSeats(section: Section) {
     setEditing(section);
   }
 
-  function handleExit(seats: Seat[], grid: GridConfig | null) {
+  function handleExit(rows: SeatRow[]) {
     if (editing) {
       const id = editing.id;
-      setSeatsBySection((prev) => ({ ...prev, [id]: seats }));
-      setGridBySection((prev) => {
-        const next = { ...prev };
-        if (grid) next[id] = grid;
-        else delete next[id];
-        return next;
-      });
+      setRowsBySection((prev) => ({ ...prev, [id]: rows }));
     }
     setEditing(null);
   }
@@ -94,8 +105,7 @@ export default function SeatmapStudio({ venueSeq }: Props) {
       <SeatmapRegisterBar
         venueSeq={venueSeq}
         sections={sections}
-        seatsBySection={seatsBySection}
-        gridBySection={gridBySection}
+        rowsBySection={rowsBySection}
       />
       <div className="min-h-0 flex-1">
         <div className={editing ? "hidden" : "h-full"}>
@@ -103,16 +113,20 @@ export default function SeatmapStudio({ venueSeq }: Props) {
             initialSections={initialSections ?? undefined}
             onEditSeats={handleEditSeats}
             onSectionsChange={handleSectionsChange}
+            onBackgroundChange={setBackground}
+            onSectionMove={handleSectionMove}
+            keyboardEnabled={!editing}
           />
         </div>
         {editing && (
           <div className="h-full">
-            <SeatEditor
+            <RowEditor
               key={editing.id}
               section={editing}
-              initialSeats={seatsBySection[editing.id]}
-              initialGrid={gridBySection[editing.id]}
+              initialRows={rowsBySection[editing.id]}
+              background={background}
               onExit={handleExit}
+              onRowsChange={handleRowsChange}
             />
           </div>
         )}

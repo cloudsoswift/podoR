@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
+import { findSectionOverlaps } from "@/components/seatmap/core/layoutValidation";
 import { clamp, dist, snapCornerRightAngle, snapToRightAngle } from "@/components/seatmap/core/geometry";
 import {
   CLOSE_RADIUS,
@@ -294,6 +295,8 @@ export default function EditorCanvas({ state, dispatch }: Props) {
   }
 
   const invZoom = 1 / view.z;
+  // 다른 섹션과 겹친 섹션(저장 불가)을 빨갛게 표시한다.
+  const overlapping = useMemo(() => findSectionOverlaps(state.sections), [state.sections]);
   const canClose = state.draft.length >= MIN_ANCHORS;
   const drawing = state.tool === "pen" && state.draft.length > 0;
   // 도형 바디 상호작용: 선택 도구, 또는 펜 도구이면서 새로 그리는 중이 아닐 때.
@@ -347,6 +350,7 @@ export default function EditorCanvas({ state, dispatch }: Props) {
             editable={state.tool === "pen" && !drawing && selected}
             scale={invZoom}
             bodyCursor={bodyCursor}
+            invalid={overlapping.has(section.id)}
             onSectionPointerDown={beginSectionDrag}
             onAnchorPointerDown={beginAnchorDrag}
             onHandlePointerDown={beginHandleDrag}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
-import { editorReducer, initialState } from "./editorReducer";
-import { Section } from "@/components/seatmap/core/types";
+import { EditorAction, editorReducer, initialState } from "./editorReducer";
+import { BackgroundImage, Section } from "@/components/seatmap/core/types";
 import EditorCanvas from "./EditorCanvas";
 import EditorToolbar from "./EditorToolbar";
 import JsonPanel from "./JsonPanel";
@@ -14,17 +14,40 @@ interface Props {
   onEditSeats?: (section: Section) => void;
   // 섹션 목록이 바뀔 때마다 상위로 알린다(좌석맵 등록용).
   onSectionsChange?: (sections: Section[]) => void;
+  // 밑그림이 바뀔 때마다 상위로 알린다(줄 에디터에 같은 밑그림을 보여 주기 위해).
+  onBackgroundChange?: (background: BackgroundImage | null) => void;
+  // 섹션을 평행 이동할 때 이동량을 알린다(그 섹션의 줄도 함께 옮기기 위해).
+  onSectionMove?: (id: string, dx: number, dy: number) => void;
+  // false 면 키보드 단축키를 받지 않는다(줄 에디터가 열려 이 화면이 숨겨진 동안).
+  keyboardEnabled?: boolean;
 }
 
-export default function SectionEditor({ initialSections, onEditSeats, onSectionsChange }: Props) {
-  const [state, dispatch] = useReducer(editorReducer, initialState);
+export default function SectionEditor({
+  initialSections,
+  onEditSeats,
+  onSectionsChange,
+  onBackgroundChange,
+  onSectionMove,
+  keyboardEnabled = true,
+}: Props) {
+  const [state, rawDispatch] = useReducer(editorReducer, initialState);
+
+  // 섹션 이동은 디스패치 직전에 상위로 알린다.
+  function dispatch(action: EditorAction) {
+    if (action.type === "MOVE_SECTION") onSectionMove?.(action.id, action.dx, action.dy);
+    rawDispatch(action);
+  }
 
   // 저장된 섹션을 한 번 주입(로드 완료 후). LOAD_SECTIONS 는 sections 를 통째로 교체한다.
   useEffect(() => {
     if (initialSections && initialSections.length > 0) {
-      dispatch({ type: "LOAD_SECTIONS", sections: initialSections });
+      rawDispatch({ type: "LOAD_SECTIONS", sections: initialSections });
     }
   }, [initialSections]);
+
+  useEffect(() => {
+    onBackgroundChange?.(state.background);
+  }, [state.background, onBackgroundChange]);
 
   // 섹션 목록을 상위(통합 화면)와 동기화한다.
   useEffect(() => {
@@ -33,22 +56,23 @@ export default function SectionEditor({ initialSections, onEditSeats, onSections
 
   // Esc: 그리던 도형 취소 / Delete: 선택 섹션 삭제
   useEffect(() => {
+    if (!keyboardEnabled) return;
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
       if (e.key === "Escape") {
-        dispatch({ type: "CANCEL_DRAFT" });
+        rawDispatch({ type: "CANCEL_DRAFT" });
       } else if (
         (e.key === "Delete" || e.key === "Backspace") &&
         state.selectedId
       ) {
-        dispatch({ type: "DELETE_SECTION", id: state.selectedId });
+        rawDispatch({ type: "DELETE_SECTION", id: state.selectedId });
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [state.selectedId]);
+  }, [state.selectedId, keyboardEnabled]);
 
   return (
     <div className="flex h-full flex-col">

@@ -1,14 +1,12 @@
 import { SeatViewSeat } from "@/lib/api/seatview";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { newRow, rowSeats } from "@/components/seatmap/core/rowGeometry";
+import { SeatRow } from "@/components/seatmap/core/seatTypes";
 import { matchSectionSeats, MatchedSeat, seatLabel, seatState } from "../seatMatching";
 
-const lay = (gridRow: number, number: number, available = true): Seat => ({
-  id: `${gridRow}-${number}`,
-  x: number * 20,
-  y: gridRow * 20,
-  gridRow,
-  number,
-  available,
+const row = (patch: Partial<SeatRow> = {}): SeatRow => ({
+  ...newRow("r", 3, { x: 40, y: 20 }),
+  name: "A",
+  ...patch,
 });
 
 const ev = (
@@ -27,22 +25,26 @@ const ev = (
   changeVersion: 0,
 });
 
-test("비가용 앞행이 있으면 판매 좌석은 B열부터 매칭된다", () => {
-  const m = matchSectionSeats([lay(0, 1, false), lay(1, 1), lay(1, 2)], [ev(11, "B", 1), ev(12, "B", 2)]);
-  expect(m[0].row).toBe("A");
-  expect(m[0].event).toBeNull();
-  expect(m[1].event?.eventSeatSeq).toBe(11);
-  expect(m[2].event?.eventSeatSeq).toBe(12);
+test("(줄 이름, 번호)로 매칭: 시작 번호 15 인 줄", () => {
+  const m = matchSectionSeats([row({ startNumber: 15 })], [ev(15, "A", 15), ev(17, "A", 17), ev(99, "B", 15)]);
+  expect(m.map((x) => x.event?.eventSeatSeq ?? null)).toEqual([15, null, 17]);
+  expect(m.map((x) => x.row)).toEqual(["A", "A", "A"]);
 });
 
-test("결번 좌석 번호도 number 로 매칭된다", () => {
-  const m = matchSectionSeats([lay(0, 1), lay(0, 3)], [ev(3, "A", 3)]);
-  expect(m[0].event).toBeNull();
-  expect(m[1].event?.eventSeatSeq).toBe(3);
+test("건너뛰기로 번호가 없는 좌석은 매칭되지 않고 라벨은 줄 이름만", () => {
+  const m = matchSectionSeats(
+    [row({ unavailable: [1], skipUnavailableNumbers: true })],
+    [ev(1, "A", 1), ev(2, "A", 2)],
+  );
+  expect(m[1].seat.number).toBeNull();
+  expect(m[1].event).toBeNull();
+  expect(seatLabel(m[1])).toBe("A열");
+  expect(m[2].event?.eventSeatSeq).toBe(2);
 });
 
 describe("seatState 우선순위", () => {
-  const match = (e: SeatViewSeat | null): MatchedSeat => ({ seat: lay(0, 1), row: "A", event: e });
+  const seat = rowSeats(row())[0];
+  const match = (e: SeatViewSeat | null): MatchedSeat => ({ seat, row: "A", event: e });
 
   test("판매완료는 선택보다 우선", () => {
     expect(seatState(match(ev(1, "A", 1, "SOLD")), new Set(), new Set([1]))).toBe("sold");
@@ -60,8 +62,15 @@ describe("seatState 우선순위", () => {
 });
 
 test("seatLabel 은 가격 없이 등급만", () => {
-  const sold = seatLabel({ seat: lay(0, 1), row: "A", event: ev(1, "A", 1) });
+  const seat = rowSeats(row())[0];
+  const sold = seatLabel({ seat, row: "A", event: ev(1, "A", 1) });
   expect(sold).toBe("A열 1번 · VIP");
   expect(sold).not.toContain("원");
-  expect(seatLabel({ seat: lay(0, 1), row: "A", event: null })).toBe("A열 1번");
+  expect(seatLabel({ seat, row: "A", event: null })).toBe("A열 1번");
+});
+
+test("줄 이름의 앞뒤 공백은 빼고 매칭한다(저장 시와 같은 규칙)", () => {
+  const m = matchSectionSeats([row({ name: " A " })], [ev(1, "A", 1)]);
+  expect(m[0].event?.eventSeatSeq).toBe(1);
+  expect(m[0].row).toBe("A");
 });

@@ -1,13 +1,13 @@
 import { SeatViewSeat } from "@/lib/api/seatview";
-import { rowLabelsByGridRow } from "@/components/seatmap/core/seatGeometry";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { rowSeats } from "@/components/seatmap/core/rowGeometry";
+import { RowSeat, SeatRow } from "@/components/seatmap/core/seatTypes";
 
-// unsold = 회차 좌석이 없음(에디터 비가용 / 미등급 / 제외 좌석).
+// unsold = 회차 좌석이 없음(에디터 사용 안 함 / 미등급 / 제외 좌석).
 export type SeatState = "available" | "held" | "sold" | "unsold" | "selected";
 
 export interface MatchedSeat {
-  seat: Seat; // layoutJson 좌석(x/y)
-  row: string; // 행 라벨(A, B…)
+  seat: RowSeat; // 줄에서 계산한 좌석(좌표·반지름·번호)
+  row: string; // 줄 이름
   event: SeatViewSeat | null; // 매칭된 회차 좌석
 }
 
@@ -20,18 +20,18 @@ export const SEAT_COLORS: Record<SeatState, string> = {
 };
 
 /**
- * 섹션의 layoutJson 좌석과 회차 좌석을 (행 라벨, 좌석 번호)로 짝짓는다.
- * 행 라벨은 저장 시(allSeatsForSave)와 같은 규칙이라야 Seat 테이블의 row_number 와 일치한다.
+ * 섹션의 줄 좌석과 회차 좌석을 (줄 이름, 좌석 번호)로 짝짓는다.
+ * 저장 시 Seat 테이블에 들어간 키(row_number = 줄 이름)와 같은 규칙이다. 번호 없는 좌석은 짝이 없다.
  */
-export function matchSectionSeats(
-  layoutSeats: Seat[],
-  sectionEventSeats: SeatViewSeat[],
-): MatchedSeat[] {
-  const labels = rowLabelsByGridRow(layoutSeats);
+export function matchSectionSeats(rows: SeatRow[], sectionEventSeats: SeatViewSeat[]): MatchedSeat[] {
   const byKey = new Map(sectionEventSeats.map((e) => [`${e.rowNumber}-${e.seatNumber}`, e]));
-  return layoutSeats.map((seat) => {
-    const row = labels.get(seat.gridRow) ?? "A";
-    return { seat, row, event: byKey.get(`${row}-${seat.number}`) ?? null };
+  return rows.flatMap((row) => {
+    const name = row.name.trim(); // 저장 시(buildSeatmapPayload)와 같은 이름
+    return rowSeats(row).map((seat) => ({
+      seat,
+      row: name,
+      event: seat.number === null ? null : (byKey.get(`${name}-${seat.number}`) ?? null),
+    }));
   });
 }
 
@@ -43,8 +43,8 @@ export function seatState(m: MatchedSeat, held: Set<number>, selected: Set<numbe
   return "available";
 }
 
-/** 호버 라벨. 가격은 표시하지 않는다. */
+/** 호버 라벨. 가격은 표시하지 않는다. 번호가 없으면 줄 이름만. */
 export function seatLabel(m: MatchedSeat): string {
-  const base = `${m.row}열 ${m.seat.number}번`;
+  const base = m.seat.number === null ? `${m.row}열` : `${m.row}열 ${m.seat.number}번`;
   return m.event ? `${base} · ${m.event.grade}` : base;
 }

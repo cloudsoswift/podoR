@@ -1,53 +1,18 @@
-import {
-  allSeatsForSave,
-  DEFAULT_PITCH,
-  pitchFromSeats,
-  rowLabelsByGridRow,
-  seatRadius,
-  seatRadiusFor,
-} from "../seatGeometry";
-import { Seat } from "../seatTypes";
+import { flattenSection } from "../seatGeometry";
+import { Section } from "../types";
 
-const s = (gridRow: number, number: number, available = true): Seat => ({
-  id: `${gridRow}-${number}`,
-  x: number * 10,
-  y: gridRow * 10,
-  gridRow,
-  number,
-  available,
-});
+const a = (id: string, x: number, y: number) => ({ id, x, y, handleIn: null, handleOut: null });
 
-test("rowLabelsByGridRow: 비가용 행도 라벨을 차지한다", () => {
-  const m = rowLabelsByGridRow([s(2, 1, false), s(5, 1), s(5, 2)]);
-  expect(m.get(2)).toBe("A");
-  expect(m.get(5)).toBe("B");
-});
-
-test("allSeatsForSave 라벨과 rowLabelsByGridRow 가 일치한다", () => {
-  const seats = [s(0, 1, false), s(3, 1), s(3, 2, false), s(7, 4)];
-  const labels = rowLabelsByGridRow(seats);
-  for (const r of allSeatsForSave(seats)) expect(r.row).toBe(labels.get(r.gridRow));
-});
-
-test("seatRadius 는 작은 pitch 의 0.4배, 하한 1", () => {
-  expect(seatRadius(20, 30)).toBe(8);
-  expect(seatRadius(1, 1)).toBe(1);
-});
-
-test("pitchFromSeats 는 최근접 거리 최솟값, 좌석 1개 이하면 DEFAULT_PITCH", () => {
-  expect(
-    pitchFromSeats([
-      { x: 0, y: 0 },
-      { x: 12, y: 0 },
-      { x: 0, y: 30 },
-    ]),
-  ).toBe(12);
-  expect(pitchFromSeats([{ x: 5, y: 5 }])).toBe(DEFAULT_PITCH);
-  expect(pitchFromSeats([])).toBe(DEFAULT_PITCH);
-});
-
-test("seatRadiusFor: 저장된 간격이 있으면 그것으로, 없으면 좌표로 추정한 간격으로 계산한다", () => {
-  const seats = [{ x: 0, y: 0 }, { x: 10, y: 0 }];
-  expect(seatRadiusFor({ colPitch: 25, rowPitch: 30 }, seats)).toBe(seatRadius(25, 30));
-  expect(seatRadiusFor(undefined, seats)).toBe(seatRadius(10, 10));
+test("flattenSection: 곡선 없는 섹션은 앵커 꼭짓점 그대로", () => {
+  const sec: Section = {
+    id: "s",
+    name: "S",
+    color: "#000",
+    anchors: [a("1", 0, 0), a("2", 100, 0), a("3", 100, 50)],
+  };
+  expect(flattenSection(sec)).toEqual([
+    { x: 100, y: 0 },
+    { x: 100, y: 50 },
+    { x: 0, y: 0 },
+  ]);
 });

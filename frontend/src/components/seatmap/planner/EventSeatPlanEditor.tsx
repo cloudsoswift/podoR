@@ -6,9 +6,9 @@ import MapCanvas from "@/components/seatmap/core/MapCanvas";
 import SeatDot from "@/components/seatmap/core/SeatDot";
 import SectionOutline from "@/components/seatmap/core/SectionOutline";
 import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
-import { rowLabelsByGridRow, seatRadiusFor } from "@/components/seatmap/core/seatGeometry";
+import { rowSeats, seatKey } from "@/components/seatmap/core/rowGeometry";
 import { Section } from "@/components/seatmap/core/types";
-import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
+import { SeatRow } from "@/components/seatmap/core/seatTypes";
 import { useClickOrPan } from "@/components/seatmap/core/useClickOrPan";
 import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 import { GradeItem, SeatKey, SeatPlanResponse, saveSeatPlan } from "@/lib/api/seatPlan";
@@ -22,21 +22,20 @@ interface Props {
 const keyStr = (section: string, row: string, num: number) => `${section}|${row}|${num}`;
 
 interface SeatInfo {
-  id: string;
-  sectionId: string;
+  id: string; // 섹션 안 seatKey 에 섹션 id 를 붙인 렌더 키
   x: number;
   y: number;
+  r: number;
   section: string;
   row: string;
-  number: number;
+  number: number | null; // 건너뛰기로 번호가 없는 좌석은 null(백엔드 좌석 없음)
   available: boolean;
 }
 
 export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: Props) {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
-  const [seatsBySection, setSeatsBySection] = useState<Record<string, Seat[]>>({});
-  const [gridBySection, setGridBySection] = useState<Record<string, GridConfig>>({});
+  const [rowsBySection, setRowsBySection] = useState<Record<string, SeatRow[]>>({});
   const [grades, setGrades] = useState<GradeItem[]>(initialPlan.grades);
   const [sectionGrades, setSectionGrades] = useState<Record<string, string>>(initialPlan.sectionGrades);
   const [excludedKeys, setExcludedKeys] = useState<Set<string>>(new Set());
@@ -50,8 +49,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
       if (!active) return;
       const doc = parseSeatmapDoc(json);
       setSections(doc.sections);
-      setSeatsBySection(doc.seatsBySection);
-      setGridBySection(doc.gridBySection);
+      setRowsBySection(doc.rowsBySection);
       setLoaded(true);
     });
     return () => {
@@ -59,27 +57,25 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
     };
   }, [venueSeq]);
 
-  // 좌석맵 좌표 + 백엔드와 일치하는 (section,row,number) 키.
-  const seatInfos = useMemo<SeatInfo[]>(() => {
-    const out: SeatInfo[] = [];
-    for (const sec of sections) {
-      const secSeats = seatsBySection[sec.id] ?? [];
-      const labelByRow = rowLabelsByGridRow(secSeats);
-      for (const s of secSeats) {
-        out.push({
-          id: s.id,
-          sectionId: sec.id,
-          x: s.x,
-          y: s.y,
-          section: sec.name,
-          row: labelByRow.get(s.gridRow) ?? "A",
-          number: s.number,
-          available: s.available,
-        });
-      }
-    }
-    return out;
-  }, [sections, seatsBySection]);
+  // 줄에서 계산한 좌석 + 백엔드와 일치하는 (섹션 이름, 줄 이름, 번호) 키.
+  const seatInfos = useMemo<SeatInfo[]>(
+    () =>
+      sections.flatMap((sec) =>
+        (rowsBySection[sec.id] ?? []).flatMap((row) =>
+          rowSeats(row).map((s) => ({
+            id: `${sec.id}:${seatKey(s.rowId, s.index)}`,
+            x: s.x,
+            y: s.y,
+            r: s.r,
+            section: sec.name,
+            row: row.name.trim(), // 저장 시와 같은 이름
+            number: s.number,
+            available: s.available,
+          })),
+        ),
+      ),
+    [sections, rowsBySection],
+  );
 
   // 최초 제외 집합: 등급 섹션의 가용 좌석 중 현재 sellable 이 아닌 것.
   useEffect(() => {
@@ -89,7 +85,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
     );
     const excl = new Set<string>();
     for (const si of seatInfos) {
-      if (!si.available) continue;
+      if (!si.available || si.number === null) continue;
       if (!initialPlan.sectionGrades[si.section]) continue; // 비-등급 섹션은 후보 아님
       const k = keyStr(si.section, si.row, si.number);
       if (!sellableSet.has(k)) excl.add(k);
@@ -106,7 +102,8 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
   const gradeNames = useMemo(() => grades.map((g) => g.grade).filter(Boolean), [grades]);
 
   const toggleSeat = (si: SeatInfo) => {
-    if (!si.available || !sectionGrades[si.section]) return; // 등급 섹션의 가용 좌석만 토글
+    // 등급 섹션의 번호 있는 가용 좌석만 토글
+    if (!si.available || si.number === null || !sectionGrades[si.section]) return;
     const k = keyStr(si.section, si.row, si.number);
     setExcludedKeys((prev) => {
       const next = new Set(prev);
@@ -116,25 +113,13 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
     });
   };
 
-  // 섹션별 좌석 반지름(좌석을 만든 간격 기준).
-  const radiusBySection = useMemo(
-    () =>
-      new Map(
-        sections.map((sec) => [
-          sec.id,
-          seatRadiusFor(gridBySection[sec.id], seatsBySection[sec.id] ?? []),
-        ]),
-      ),
-    [sections, seatsBySection, gridBySection],
-  );
-
   // 캔버스는 로딩 중에도 마운트해 둔다(usePanZoom 의 휠 리스너가 마운트 시 붙는다).
   const pz = usePanZoom();
   const { svgProps, guardClick } = useClickOrPan(pz);
 
   const seatColor = (si: SeatInfo): string => {
     const grade = sectionGrades[si.section];
-    if (!grade) return "#d1d5db"; // 미판매 섹션
+    if (!grade || si.number === null) return "#d1d5db"; // 미판매 섹션
     const k = keyStr(si.section, si.row, si.number);
     return excludedKeys.has(k) ? "#9ca3af" : "#34d399"; // 제외=회색, 판매=emerald
   };
@@ -181,10 +166,10 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
               <SectionOutline key={sec.id} section={sec} />
             ))}
             {seatInfos.map((si) => {
-              if (!si.available) return null; // 비가용 좌석은 빈 자리
-              const r = radiusBySection.get(si.sectionId) ?? 1;
-              // 등급 섹션의 좌석만 이번 공연 제외 토글 대상.
-              const toggleable = !!sectionGrades[si.section];
+              if (!si.available) return null; // 사용 안 함 좌석은 빈 자리
+              const r = si.r;
+              // 등급 섹션의 번호 있는 좌석만 이번 공연 제외 토글 대상.
+              const toggleable = !!sectionGrades[si.section] && si.number !== null;
               return (
                 <SeatDot
                   key={si.id}

@@ -13,6 +13,8 @@ interface Props {
   bodyCursor: string;
   // 매진 등으로 흐리게 표시(예매 화면 섹션 맵).
   dimmed?: boolean;
+  // 다른 섹션과 겹쳐 저장할 수 없음(섹션 에디터).
+  invalid?: boolean;
   onSectionPointerDown?: (e: React.PointerEvent, sectionId: string) => void;
   // 바디 click(예매 화면: 드래그와 구분된 클릭으로 섹션 진입).
   onSectionClick?: (sectionId: string) => void;
@@ -37,6 +39,7 @@ export default function SectionShape({
   scale,
   bodyCursor,
   dimmed = false,
+  invalid = false,
   onSectionPointerDown,
   onSectionClick,
   onAnchorPointerDown,
@@ -51,8 +54,9 @@ export default function SectionShape({
         d={d}
         fill={section.color}
         fillOpacity={dimmed ? 0.1 : selected ? 0.45 : 0.28}
-        stroke={dimmed ? "#9ca3af" : section.color}
-        strokeWidth={(selected ? 2.5 : 1.5) * s}
+        stroke={invalid ? "#ef4444" : dimmed ? "#9ca3af" : section.color}
+        strokeWidth={(selected || invalid ? 2.5 : 1.5) * s}
+        data-invalid={invalid ? "true" : undefined}
         strokeLinejoin="round"
         style={{
           pointerEvents: bodyInteractive ? "auto" : "none",

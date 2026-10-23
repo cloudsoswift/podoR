@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { BASE_URL } from "@/mocks/handlers";
 import EventSeatPlanEditor from "../EventSeatPlanEditor";
+import { newRow } from "@/components/seatmap/core/rowGeometry";
 import { SeatPlanResponse, SeatPlanPayload } from "@/lib/api/seatPlan";
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -51,18 +52,17 @@ test("저장 시 가격은 콤마 없는 숫자로 전송된다", async () => {
   expect(sent!.grades[0].price).toBe(1000);
 });
 
-test("제외 좌석의 행 라벨은 비가용 좌석만 있는 행도 포함해 위→아래로 매겨진다", async () => {
+test("제외 좌석 키는 줄 이름과 줄에서 계산한 번호를 쓰고, 번호 없는 좌석은 제외 대상이 아니다", async () => {
   const user = userEvent.setup();
   const anchor = (id: string, x: number, y: number) => ({ id, x, y, handleIn: null, handleOut: null });
-  const seat = (gridRow: number, number: number, available = true) => ({
-    id: `r${gridRow}-${number}`,
-    x: number * 20,
-    y: gridRow * 20,
-    gridRow,
-    number,
-    available,
-  });
-  // gridRow 0(비가용만)=A, 2=B, 5=C. 비가용 행을 건너뛰면 B→A, C→B 로 어긋난다.
+  // 줄 B: 시작 15, 가운데 좌석 사용 안 함 + 건너뛰기 → 번호 [15, 없음, 16].
+  const rowB = {
+    ...newRow("rb", 3, { x: 50, y: 60 }),
+    name: "B",
+    startNumber: 15,
+    unavailable: [1],
+    skipUnavailableNumbers: true,
+  };
   const layoutJson = JSON.stringify({
     version: 1,
     sections: [
@@ -73,7 +73,7 @@ test("제외 좌석의 행 라벨은 비가용 좌석만 있는 행도 포함해
         anchors: [anchor("a1", 0, 0), anchor("a2", 100, 0), anchor("a3", 100, 120), anchor("a4", 0, 120)],
       },
     ],
-    seatsBySection: { s1: [seat(0, 1, false), seat(2, 1), seat(2, 2), seat(5, 1)] },
+    rowsBySection: { s1: [rowB] },
   });
   let sent: SeatPlanPayload | undefined;
   server.use(
@@ -86,18 +86,16 @@ test("제외 좌석의 행 라벨은 비가용 좌석만 있는 행도 포함해
   const plan: SeatPlanResponse = {
     grades: [{ grade: "VIP", price: 1000 }],
     sectionGrades: { A구역: "VIP" },
-    sellableSeats: [{ section: "A구역", rowNumber: "B", seatNumber: 1 }],
+    sellableSeats: [{ section: "A구역", rowNumber: "B", seatNumber: 15 }],
   };
 
   render(<EventSeatPlanEditor eventId="E1" venueSeq={1} initialPlan={plan} />);
-  await waitFor(() => expect(screen.queryByText("좌석맵 불러오는 중…")).not.toBeInTheDocument());
+  await screen.findByRole("button", { name: "A구역 B열 15번" });
+  expect(screen.getAllByRole("button", { name: /^A구역 B열/ })).toHaveLength(2);
   await user.click(screen.getByRole("button", { name: "저장" }));
 
   await waitFor(() => expect(sent).toBeDefined());
-  expect(sent!.excludedSeats).toEqual([
-    { section: "A구역", rowNumber: "B", seatNumber: 2 },
-    { section: "A구역", rowNumber: "C", seatNumber: 1 },
-  ]);
+  expect(sent!.excludedSeats).toEqual([{ section: "A구역", rowNumber: "B", seatNumber: 16 }]);
 });
 
 describe("좌석 맵", () => {
@@ -108,12 +106,15 @@ describe("좌석 맵", () => {
     color: "#4f46e5",
     anchors: [anchor(`${id}a`, x, 0), anchor(`${id}b`, x + 100, 0), anchor(`${id}c`, x + 100, 40), anchor(`${id}d`, x, 40)],
   });
-  const seat = (id: string, x: number, number: number) => ({ id, x, y: 20, gridRow: 0, number, available: true });
-  // A구역(VIP 등급) 2석 + B구역(등급 없음 = 미판매) 1석.
+  const rowA = (id: string, seatCount: number, x: number) => ({
+    ...newRow(id, seatCount, { x, y: 20 }),
+    name: "A",
+  });
+  // A구역(VIP 등급) 2석(x 20·40) + B구역(등급 없음 = 미판매) 1석(x 220).
   const doc = {
     version: 1,
     sections: [rect("s1", "A구역", 0), rect("s2", "B구역", 200)],
-    seatsBySection: { s1: [seat("a1", 20, 1), seat("a2", 40, 2)], s2: [seat("b1", 220, 1)] },
+    rowsBySection: { s1: [rowA("ra", 2, 30)], s2: [rowA("rb", 1, 220)] },
   };
   const plan: SeatPlanResponse = {
     grades: [{ grade: "VIP", price: 1000 }],
@@ -170,9 +171,8 @@ describe("좌석 맵", () => {
     expect(sent()!.excludedSeats).toEqual([]);
   });
 
-  test("좌석 반지름은 저장된 간격으로 계산한다", async () => {
-    setup({ ...doc, gridBySection: { s1: { colPitch: 25, rowPitch: 30 } } });
-    // min(25,30)*0.4 = 10. 좌표로 추정하면 간격 20 → 8.
+  test("좌석 반지름은 줄에 저장된 좌석 크기를 쓴다", async () => {
+    setup({ ...doc, rowsBySection: { ...doc.rowsBySection, s1: [{ ...rowA("ra", 2, 30), seatRadius: 10 }] } });
     expect(await screen.findByRole("button", { name: "A구역 A열 1번" })).toHaveAttribute("r", "10");
   });
 });
