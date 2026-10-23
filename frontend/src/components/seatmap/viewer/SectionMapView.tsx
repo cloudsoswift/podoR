@@ -4,7 +4,7 @@ import MapCanvas from "@/components/seatmap/core/MapCanvas";
 import SectionShape from "@/components/seatmap/core/SectionShape";
 import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 import { Section } from "@/components/seatmap/core/types";
-import { useClickOrPan } from "./useClickOrPan";
+import { useClickOrPan } from "@/components/seatmap/core/useClickOrPan";
 
 interface Props {
   sections: Section[];

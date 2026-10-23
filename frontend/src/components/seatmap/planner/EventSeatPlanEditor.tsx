@@ -2,10 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import MapCanvas from "@/components/seatmap/core/MapCanvas";
+import SeatDot from "@/components/seatmap/core/SeatDot";
+import SectionOutline from "@/components/seatmap/core/SectionOutline";
 import { getVenueLayout, parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
-import { rowLabelsByGridRow } from "@/components/seatmap/core/seatGeometry";
+import { rowLabelsByGridRow, seatRadiusFor } from "@/components/seatmap/core/seatGeometry";
 import { Section } from "@/components/seatmap/core/types";
-import { Seat } from "@/components/seatmap/core/seatTypes";
+import { GridConfig, Seat } from "@/components/seatmap/core/seatTypes";
+import { useClickOrPan } from "@/components/seatmap/core/useClickOrPan";
+import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 import { GradeItem, SeatKey, SeatPlanResponse, saveSeatPlan } from "@/lib/api/seatPlan";
 
 interface Props {
@@ -14,12 +19,11 @@ interface Props {
   initialPlan: SeatPlanResponse;
 }
 
-const VIEW_W = 1000;
-const VIEW_H = 700;
-
 const keyStr = (section: string, row: string, num: number) => `${section}|${row}|${num}`;
 
 interface SeatInfo {
+  id: string;
+  sectionId: string;
   x: number;
   y: number;
   section: string;
@@ -32,6 +36,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
   const [seatsBySection, setSeatsBySection] = useState<Record<string, Seat[]>>({});
+  const [gridBySection, setGridBySection] = useState<Record<string, GridConfig>>({});
   const [grades, setGrades] = useState<GradeItem[]>(initialPlan.grades);
   const [sectionGrades, setSectionGrades] = useState<Record<string, string>>(initialPlan.sectionGrades);
   const [excludedKeys, setExcludedKeys] = useState<Set<string>>(new Set());
@@ -46,6 +51,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
       const doc = parseSeatmapDoc(json);
       setSections(doc.sections);
       setSeatsBySection(doc.seatsBySection);
+      setGridBySection(doc.gridBySection);
       setLoaded(true);
     });
     return () => {
@@ -61,6 +67,8 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
       const labelByRow = rowLabelsByGridRow(secSeats);
       for (const s of secSeats) {
         out.push({
+          id: s.id,
+          sectionId: sec.id,
           x: s.x,
           y: s.y,
           section: sec.name,
@@ -108,10 +116,25 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
     });
   };
 
+  // 섹션별 좌석 반지름(좌석을 만든 간격 기준).
+  const radiusBySection = useMemo(
+    () =>
+      new Map(
+        sections.map((sec) => [
+          sec.id,
+          seatRadiusFor(gridBySection[sec.id], seatsBySection[sec.id] ?? []),
+        ]),
+      ),
+    [sections, seatsBySection, gridBySection],
+  );
+
+  // 캔버스는 로딩 중에도 마운트해 둔다(usePanZoom 의 휠 리스너가 마운트 시 붙는다).
+  const pz = usePanZoom();
+  const { svgProps, guardClick } = useClickOrPan(pz);
+
   const seatColor = (si: SeatInfo): string => {
-    if (!si.available) return "transparent"; // 비가용 좌석은 빈 자리
     const grade = sectionGrades[si.section];
-    if (!grade) return "#e5e7eb"; // 미판매 섹션
+    if (!grade) return "#d1d5db"; // 미판매 섹션
     const k = keyStr(si.section, si.row, si.number);
     return excludedKeys.has(k) ? "#9ca3af" : "#34d399"; // 제외=회색, 판매=emerald
   };
@@ -140,30 +163,44 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
 
   return (
     <div className="flex h-full">
-      <div className="min-w-0 flex-1 overflow-auto p-4">
-        {!loaded ? (
-          <div className="text-sm text-gray-500">좌석맵 불러오는 중…</div>
-        ) : (
-          <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="h-full w-full rounded-xl border border-gray-200 bg-white">
-            {seatInfos.map((si, i) => {
-              const color = seatColor(si);
-              if (color === "transparent") return null;
+      <div className="min-w-0 flex-1 p-4">
+        <div className="h-full overflow-hidden rounded-xl border border-gray-200">
+          <MapCanvas
+            pz={pz}
+            cursor={pz.panning ? "grabbing" : "grab"}
+            svgProps={svgProps}
+            overlay={
+              !loaded && (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+                  좌석맵 불러오는 중…
+                </div>
+              )
+            }
+          >
+            {sections.map((sec) => (
+              <SectionOutline key={sec.id} section={sec} />
+            ))}
+            {seatInfos.map((si) => {
+              if (!si.available) return null; // 비가용 좌석은 빈 자리
+              const r = radiusBySection.get(si.sectionId) ?? 1;
+              // 등급 섹션의 좌석만 이번 공연 제외 토글 대상.
+              const toggleable = !!sectionGrades[si.section];
               return (
-                <circle
-                  key={i}
-                  cx={si.x}
-                  cy={si.y}
-                  r={4}
-                  fill={color}
-                  stroke="#fff"
-                  strokeWidth={0.5}
-                  style={{ cursor: si.available && sectionGrades[si.section] ? "pointer" : "default" }}
-                  onClick={() => toggleSeat(si)}
+                <SeatDot
+                  key={si.id}
+                  x={si.x}
+                  y={si.y}
+                  r={r}
+                  fill={seatColor(si)}
+                  stroke="#ffffff"
+                  strokeWidth={r * 0.16}
+                  label={`${si.section} ${si.row}열 ${si.number}번`}
+                  onClick={toggleable ? guardClick(() => toggleSeat(si)) : undefined}
                 />
               );
             })}
-          </svg>
-        )}
+          </MapCanvas>
+        </div>
       </div>
 
       <aside className="w-80 shrink-0 overflow-y-auto border-l border-gray-200 bg-gray-50 p-4">
@@ -234,6 +271,7 @@ export default function EventSeatPlanEditor({ eventId, venueSeq, initialPlan }: 
 
         <p className="mt-4 text-xs text-gray-400">
           캔버스에서 좌석 클릭 → 이번 공연 미가용 토글(회색). emerald=판매, 회색=제외, 연회색=미판매 섹션.
+          드래그로 화면 이동, 휠로 확대·축소.
         </p>
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}

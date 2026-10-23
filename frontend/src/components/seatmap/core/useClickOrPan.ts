@@ -1,9 +1,9 @@
 import { useRef } from "react";
-import { PanZoom } from "@/components/seatmap/core/usePanZoom";
-import { CLICK_SLOP } from "@/components/seatmap/core/viewport";
+import { PanZoom } from "./usePanZoom";
+import { CLICK_SLOP } from "./viewport";
 
 /**
- * 예매 화면 캔버스 입력 규칙: 도구 전환 없이 좌클릭 드래그 = 팬, 제자리 클릭 = 섹션/좌석 클릭.
+ * 예매/좌석 플랜 캔버스 입력 규칙: 도구 전환 없이 좌클릭 드래그 = 팬, 제자리 클릭 = 섹션/좌석 클릭.
  * 이동이 CLICK_SLOP(화면 px)을 넘는 순간 팬으로 전환하고, 팬이 끝난 직후의 click 은 무시한다.
  * 지도 위 클릭 핸들러는 guardClick 으로 감싼다.
  */

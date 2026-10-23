@@ -11,7 +11,7 @@ import { usePanZoom } from "@/components/seatmap/core/usePanZoom";
 import { fitView } from "@/components/seatmap/core/viewport";
 import { SeatViewSeat } from "@/lib/api/seatview";
 import { matchSectionSeats, SEAT_COLORS, seatLabel, seatState } from "./seatMatching";
-import { useClickOrPan } from "./useClickOrPan";
+import { useClickOrPan } from "@/components/seatmap/core/useClickOrPan";
 
 interface Props {
   section: Section;
