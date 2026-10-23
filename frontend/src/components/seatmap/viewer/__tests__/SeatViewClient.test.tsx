@@ -367,3 +367,38 @@ test("좌석 반지름은 layoutJson 에 저장된 간격으로 계산한다", a
   // 좌표로 추정하면 간격 20 → 반지름 8, 저장된 간격(25,30)이면 min(25,30)*0.4 = 10.
   expect(seatButton("A열 1번 · VIP")).toHaveAttribute("r", "10");
 });
+
+test("결제 바에서 선택 좌석 목록을 펼쳐 섹션 맵에서도 확인·취소할 수 있다", async () => {
+  const user = userEvent.setup();
+  setupPolling();
+  stubQuota(0, 4);
+
+  render(<SeatViewClient eventId="E1" />);
+  await screen.findByText("현재 0 / 4");
+  await user.click(screen.getByRole("button", { name: /A구역/ }));
+  await user.click(seatButton("A열 2번 · VIP"));
+  await user.click(seatButton("A열 1번 · VIP"));
+
+  // 섹션 맵으로 돌아가도 선택은 유지되고, 목록은 접힌 상태로 시작한다.
+  await user.click(screen.getByRole("button", { name: "← 전체 섹션" }));
+  const toggle = screen.getByRole("button", { name: "선택 2석" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText("A구역(VIP) - A열 - 1번")).not.toBeInTheDocument();
+
+  await user.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const items = screen.getAllByRole("listitem").map((li) => li.textContent);
+  // 섹션·행·번호 순으로 정렬된다.
+  expect(items).toEqual([
+    expect.stringContaining("A구역(VIP) - A열 - 1번"),
+    expect.stringContaining("A구역(VIP) - A열 - 2번"),
+  ]);
+
+  await user.click(screen.getByRole("button", { name: "A구역(VIP) - A열 - 1번 선택 취소" }));
+  expect(screen.queryByText("A구역(VIP) - A열 - 1번")).not.toBeInTheDocument();
+  expect(screen.getByText("선택 1석")).toBeInTheDocument();
+
+  // 마지막 좌석을 빼면 결제 바가 사라진다.
+  await user.click(screen.getByRole("button", { name: "A구역(VIP) - A열 - 2번 선택 취소" }));
+  expect(screen.queryByRole("button", { name: "결제하기" })).not.toBeInTheDocument();
+});

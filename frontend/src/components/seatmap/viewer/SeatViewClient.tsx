@@ -7,6 +7,7 @@ import { parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
 import { holdSeats, getMySeatQuota, errorDetail } from "@/lib/api/ticketing";
 import SectionMapView from "./SectionMapView";
 import SeatMapView from "./SeatMapView";
+import CheckoutBar from "./CheckoutBar";
 
 /**
  * Section Viewer(섹션 미선택) ↔ SeatMap Viewer(섹션 선택)를 한 화면에서 오간다.
@@ -92,20 +93,21 @@ export default function SeatViewClient({ eventId }: { eventId: string }) {
     setTimeout(() => setCooling(false), 3000);
   }
 
+  // 선택 좌석 정보(섹션 무관). 좌석 상태는 이벤트 전체를 들고 있어 다른 섹션 좌석도 찾을 수 있다.
+  const selectedSeats = useMemo(
+    () => seats.filter((s) => selected.has(s.eventSeatSeq)),
+    [seats, selected],
+  );
+
+  // 선택이 비면 내려서(언마운트) 다음 선택 때 목록이 접힌 상태로 다시 시작한다.
   const checkoutBar =
-    selected.size > 0 ? (
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white p-3">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <span className="text-sm text-gray-700">선택 {selected.size}석</span>
-          <button
-            onClick={handleCheckout}
-            disabled={checkingOut}
-            className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {checkingOut ? "처리 중…" : "결제하기"}
-          </button>
-        </div>
-      </div>
+    selectedSeats.length > 0 ? (
+      <CheckoutBar
+        seats={selectedSeats}
+        checkingOut={checkingOut}
+        onRemove={toggleSeat}
+        onCheckout={handleCheckout}
+      />
     ) : null;
 
   // 페이지 흐름 안에 배치한다. fixed 로 띄우면 sticky 헤더(z-50, 불투명)에 가려진다.
