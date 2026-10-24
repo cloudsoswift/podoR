@@ -9,8 +9,12 @@ import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeatRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
 import cloudsoswift.podoR.domain.queue.WaitingQueueService;
+import cloudsoswift.podoR.domain.seat.entity.Seat;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
+import cloudsoswift.podoR.domain.ticketing.entity.Payment;
+import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
+import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.ticketing.hold.SeatHoldService;
 import cloudsoswift.podoR.domain.ticketing.repository.PaymentRepository;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingItemRepository;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -66,6 +71,9 @@ class TicketingOrderServiceTest {
         lenient().when(s.getEvent()).thenReturn(event);
         lenient().when(s.getStatus()).thenReturn(status);
         lenient().when(s.getPrice()).thenReturn(price);
+        lenient().when(s.getSeatGrade()).thenReturn("VIP");
+        lenient().when(s.getSeat()).thenReturn(Seat.builder()
+                .section("A구역").sectionKey("A").rowNumber("1").seatNumber((int) seq).build());
         return s;
     }
 
@@ -187,7 +195,6 @@ class TicketingOrderServiceTest {
         when(eventSeatRepository.updateStatusIfCurrent(seats, 1L,
                 SeatStatus.AVAILABLE, SeatStatus.SOLD, 5L)).thenReturn(2); // affected == size
         when(userRepository.findById(USER)).thenReturn(Optional.of(mock(cloudsoswift.podoR.domain.user.entity.User.class)));
-        when(eventSeatRepository.getReferenceById(anyLong())).thenReturn(mock(EventSeat.class));
 
         service.confirmOrder(EVENT_ID, USER, seats, "MOCK");
 
@@ -230,5 +237,89 @@ class TicketingOrderServiceTest {
         assertThatThrownBy(() -> service.confirmOrder(EVENT_ID, USER, seats, "MOCK"))
                 .isInstanceOf(ResponseStatusException.class);
         verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
+    }
+
+    // ---- 부분 취소 ----
+
+    private TicketingItem paidItem(long itemSeq, EventSeat es, int price) {
+        TicketingItem item = TicketingItem.builder().eventSeat(es)
+                .section("A구역").rowNumber("A").seatNumber((int) itemSeq).seatGrade("VIP").price(price).build();
+        ReflectionTestUtils.setField(item, "seq", itemSeq);
+        return item;
+    }
+
+    private TicketingOrder paidOrder(Event event, TicketingItem... items) {
+        cloudsoswift.podoR.domain.user.entity.User owner = mock(cloudsoswift.podoR.domain.user.entity.User.class);
+        lenient().when(owner.getSeq()).thenReturn(USER);
+        int total = 0;
+        for (TicketingItem i : items) total += i.getPrice();
+        TicketingOrder order = TicketingOrder.builder().event(event).user(owner)
+                .orderNumber("O1").totalPrice(total).status("PAID").build();
+        for (TicketingItem i : items) order.addItem(i);
+        when(ticketingOrderRepository.findDetailByOrderNumber("O1")).thenReturn(Optional.of(order));
+        return order;
+    }
+
+    @Test
+    void cancelItems_선택_항목만_취소하고_좌석을_AVAILABLE로() {
+        Event event = mockEvent();
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.SOLD, 10000);
+        EventSeat s2 = mockSeat(2L, event, SeatStatus.SOLD, 20000);
+        TicketingOrder order = paidOrder(event, paidItem(11L, s1, 10000), paidItem(12L, s2, 20000));
+        Payment payment = Payment.builder().ticketingOrder(order).amount(30000L).method("MOCK").build();
+        when(paymentRepository.findByTicketingOrder_Seq(any())).thenReturn(Optional.of(payment));
+        when(seatVersionGenerator.next(1L)).thenReturn(7L);
+
+        service.cancelItems(USER, "O1", List.of(12L));
+
+        verify(eventSeatRepository).updateStatusIfCurrent(List.of(2L), 1L, SeatStatus.SOLD, SeatStatus.AVAILABLE, 7L);
+        assertThat(order.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
+        assertThat(order.getTotalPrice()).isEqualTo(10000);
+        assertThat(payment.getCancelledAmount()).isEqualTo(20000L);
+        assertThat(payment.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
+        verify(snapshotCache).evict(EVENT_ID);
+    }
+
+    @Test
+    void cancelItems_PARTIALLY_CANCELLED_주문도_추가_취소_가능() {
+        Event event = mockEvent();
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.SOLD, 10000);
+        EventSeat s2 = mockSeat(2L, event, SeatStatus.SOLD, 20000);
+        TicketingOrder order = paidOrder(event, paidItem(11L, s1, 10000), paidItem(12L, s2, 20000));
+        when(seatVersionGenerator.next(1L)).thenReturn(7L, 8L);
+
+        service.cancelItems(USER, "O1", List.of(11L));
+        service.cancelItems(USER, "O1", List.of(12L));
+
+        assertThat(order.getStatus()).isEqualTo("CANCELLED");
+        assertThat(order.getTotalPrice()).isZero();
+    }
+
+    @Test
+    void cancelItems_빈목록이나_남의_주문이면_실패() {
+        Event event = mockEvent();
+        paidOrder(event, paidItem(11L, mockSeat(1L, event, SeatStatus.SOLD, 10000), 10000));
+
+        assertThatThrownBy(() -> service.cancelItems(USER, "O1", List.of()))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("400");
+        assertThatThrownBy(() -> service.cancelItems(999L, "O1", List.of(11L)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("404");
+        assertThatThrownBy(() -> service.cancelItems(USER, "O1", List.of(99L)))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("400");
+    }
+
+    @Test
+    void cancelOrder_연결이_끊긴_항목은_좌석복구에서_제외() {
+        Event event = mockEvent();
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.SOLD, 10000);
+        TicketingItem detached = paidItem(12L, mockSeat(2L, event, SeatStatus.SOLD, 20000), 20000);
+        detached.detachEventSeat();
+        TicketingOrder order = paidOrder(event, paidItem(11L, s1, 10000), detached);
+        when(seatVersionGenerator.next(1L)).thenReturn(7L);
+
+        service.cancelOrder(USER, "O1");
+
+        verify(eventSeatRepository).updateStatusIfCurrent(List.of(1L), 1L, SeatStatus.SOLD, SeatStatus.AVAILABLE, 7L);
+        assertThat(order.getStatus()).isEqualTo("CANCELLED");
     }
 }

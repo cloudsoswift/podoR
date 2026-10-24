@@ -4,6 +4,7 @@ import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.event.entity.EventSeat;
 import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.seat.entity.Seat;
+import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.venue.entity.Venue;
@@ -14,6 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,12 +38,31 @@ class TicketingItemRepositoryTest {
         venue = em.persist(EntityFixtures.venue("v"));
     }
 
-    /** event/order 에 좌석 1개짜리 아이템을 저장. */
+    /** event/order 에 좌석 1개짜리 아이템을 저장. CANCELLED 주문이면 항목도 취소 상태로. */
     private void addItem(Event event, User owner, String orderNo, String orderStatus) {
+        TicketingOrder order = em.persist(EntityFixtures.order(event, owner, orderNo, "PAID"));
+        TicketingItem item = newItem(event, order);
+        if ("CANCELLED".equals(orderStatus)) order.cancelItems(List.of(item), LocalDateTime.now());
+    }
+
+    private TicketingItem newItem(Event event, TicketingOrder order) {
         Seat seat = em.persist(EntityFixtures.seat(venue, "A", "1", ++seatNo));
         EventSeat es = em.persist(EntityFixtures.eventSeat(event, seat, SeatStatus.SOLD, 0L));
-        TicketingOrder order = em.persist(EntityFixtures.order(event, owner, orderNo, orderStatus));
-        em.persist(EntityFixtures.item(order, es));
+        return em.persist(EntityFixtures.item(order, es));
+    }
+
+    @Test
+    void 부분취소된_항목은_집계에서_제외() {
+        Event e = em.persist(EntityFixtures.event(user, venue, "E1", "S1"));
+        TicketingOrder order = em.persist(EntityFixtures.order(e, user, "O1", "PAID"));
+        TicketingItem kept = newItem(e, order);
+        TicketingItem cancelled = newItem(e, order);
+        order.cancelItems(List.of(cancelled), LocalDateTime.now());
+        em.flush();
+
+        assertThat(order.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
+        assertThat(kept.isActive()).isTrue();
+        assertThat(repo.countPaidSeatsInSeries(user.getSeq(), "S1")).isEqualTo(1L);
     }
 
     @Test

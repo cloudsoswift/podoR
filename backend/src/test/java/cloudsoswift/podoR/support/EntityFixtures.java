@@ -28,7 +28,7 @@ public final class EntityFixtures {
     }
 
     public static Seat seat(Venue venue, String section, String row, Integer number) {
-        return Seat.builder().venue(venue).section(section).rowNumber(row)
+        return Seat.builder().venue(venue).section(section).sectionKey(section).rowNumber(row)
                 .seatNumber(number).isAvailable(true).build();
     }
 
@@ -49,6 +49,8 @@ public final class EntityFixtures {
     }
 
     public static TicketingItem item(TicketingOrder order, EventSeat eventSeat) {
-        return TicketingItem.builder().ticketingOrder(order).eventSeat(eventSeat).build();
+        TicketingItem item = TicketingItem.of(eventSeat);
+        order.addItem(item);
+        return item;
     }
 }

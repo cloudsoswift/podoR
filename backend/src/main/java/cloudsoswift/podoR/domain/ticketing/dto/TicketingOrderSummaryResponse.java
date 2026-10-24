@@ -27,6 +27,7 @@ public class TicketingOrderSummaryResponse {
         this.orderedAt = o.getOrderedAt();
         this.status = o.getStatus();
         this.totalPrice = o.getTotalPrice();
-        this.seatCount = o.getItems().size();
+        // 부분 취소된 주문은 남은 좌석만, 전부 취소된 주문은 원래 좌석 수를 보여 준다.
+        this.seatCount = o.activeItems().isEmpty() ? o.getItems().size() : o.activeItems().size();
     }
 }

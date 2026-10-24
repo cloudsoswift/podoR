@@ -91,14 +91,17 @@ CREATE TABLE seat (
     seq          bigserial   NOT NULL,
     venue_seq    bigint      NOT NULL,
     section      varchar(20) NOT NULL,
+    section_key  varchar(64),
     row_number   varchar(10) NOT NULL,
     seat_number  integer,
     is_available boolean     NOT NULL DEFAULT true,
     CONSTRAINT "PK_SEAT" PRIMARY KEY (seq),
-    CONSTRAINT uk_seat_location UNIQUE (venue_seq, section, row_number, seat_number),
+    CONSTRAINT uk_seat_location UNIQUE (venue_seq, section_key, row_number, seat_number),
     CONSTRAINT "FK_venue_TO_seat_1" FOREIGN KEY (venue_seq) REFERENCES venue(seq)
 );
 CREATE INDEX idx_seat_venue ON seat (venue_seq);
+COMMENT ON COLUMN seat.section      IS '표시용 섹션 이름';
+COMMENT ON COLUMN seat.section_key  IS 'layoutJson 섹션 id. 좌석 정체성 = (venue, section_key, row_number, seat_number)';
 
 -- ---------------------------------------------------------------------
 -- event (단일 회차. series_id 로 같은 공연의 여러 회차를 묶는다)
@@ -188,6 +191,7 @@ CREATE TABLE ticketing_order (
     status       varchar(20)  NOT NULL,
     ordered_at   timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     cancelled_at timestamp,
+    version      bigint       NOT NULL DEFAULT 0,
     CONSTRAINT "PK_TICKETING_ORDER" PRIMARY KEY (seq),
     CONSTRAINT uk_ticketing_order_number UNIQUE (order_number),
     CONSTRAINT "FK_event_TO_ticketing_order_1" FOREIGN KEY (event_seq) REFERENCES event(seq),
@@ -200,11 +204,20 @@ CREATE TABLE ticketing_order (
 CREATE TABLE ticketing_item (
     seq                 bigserial NOT NULL,
     ticketing_order_seq bigint    NOT NULL,
-    event_seat_seq      bigint    NOT NULL,
+    event_seat_seq      bigint,
+    section             varchar(20) NOT NULL,
+    row_number          varchar(10) NOT NULL,
+    seat_number         integer,
+    seat_grade          varchar(10) NOT NULL,
+    price               integer     NOT NULL,
+    status              varchar(20) NOT NULL DEFAULT 'PAID',
+    cancelled_at        timestamp,
     CONSTRAINT "PK_TICKETING_ITEM" PRIMARY KEY (seq),
     CONSTRAINT "FK_ticketing_order_TO_ticketing_item_1" FOREIGN KEY (ticketing_order_seq) REFERENCES ticketing_order(seq),
     CONSTRAINT "FK_event_seat_TO_ticketing_item_1"      FOREIGN KEY (event_seat_seq)      REFERENCES event_seat(seq)
 );
+COMMENT ON COLUMN ticketing_item.event_seat_seq IS '공연장 배치 변경으로 회차 좌석이 지워지면 NULL (좌석 정보는 스냅샷 컬럼에 남음)';
+COMMENT ON COLUMN ticketing_item.status         IS 'PAID, CANCELLED (항목 단위 부분 취소)';
 
 -- ---------------------------------------------------------------------
 -- payment (결제 — Phase 2. Payment 엔티티와 1:1 대응)
@@ -218,6 +231,7 @@ CREATE TABLE payment (
     pg_transaction_id   varchar(255),
     payment_amount      bigint      NOT NULL,
     payment_status      varchar(50) NOT NULL,
+    cancelled_amount    bigint      NOT NULL DEFAULT 0,
     discount_type       varchar(50),
     discount_amount     bigint,
     paid_at             timestamp,

@@ -34,22 +34,27 @@ public class TicketingOrderDetailResponse {
         this.seats = o.getItems().stream().map(Seat::new).toList();
     }
 
+    /** 좌석 정보는 예매 시점 스냅샷에서 읽는다(회차 좌석이 지워져도 표시). */
     @Getter
     public static class Seat {
+        private final Long itemSeq;
         private final String section;
         private final String rowNumber;
         private final Integer seatNumber;
         private final String grade;
         private final Integer price;
+        private final String status;          // PAID / CANCELLED
+        private final LocalDateTime cancelledAt;
 
         public Seat(TicketingItem item) {
-            var es = item.getEventSeat();
-            var seat = es.getSeat();
-            this.section = seat.getSection();
-            this.rowNumber = seat.getRowNumber();
-            this.seatNumber = seat.getSeatNumber();
-            this.grade = es.getSeatGrade();
-            this.price = es.getPrice();
+            this.itemSeq = item.getSeq();
+            this.section = item.getSection();
+            this.rowNumber = item.getRowNumber();
+            this.seatNumber = item.getSeatNumber();
+            this.grade = item.getSeatGrade();
+            this.price = item.getPrice();
+            this.status = item.getStatus();
+            this.cancelledAt = item.getCancelledAt();
         }
     }
 }

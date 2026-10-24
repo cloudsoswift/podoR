@@ -27,10 +27,14 @@ public class Payment {
     private String method;
 
     @Column(name = "payment_status", nullable = false, length = 50)
-    private String status;   // COMPLETED / CANCELLED
+    private String status;   // COMPLETED / PARTIALLY_CANCELLED / CANCELLED
 
     @Column(name = "payment_amount", nullable = false)
     private Long amount;
+
+    // 누적 취소(환불) 금액. amount 는 결제 원금으로 유지한다.
+    @Column(name = "cancelled_amount", nullable = false)
+    private Long cancelledAmount = 0L;
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
@@ -44,11 +48,18 @@ public class Payment {
         this.method = method;
         this.amount = amount;
         this.status = "COMPLETED";
+        this.cancelledAmount = 0L;
         this.paidAt = LocalDateTime.now();
     }
 
-    public void cancel() {
-        this.status = "CANCELLED";
-        this.cancelledAt = LocalDateTime.now();
+    /** 취소(환불) 금액을 누적한다. 원금까지 취소되면 CANCELLED, 아니면 PARTIALLY_CANCELLED. */
+    public void cancelAmount(long cancelled, LocalDateTime at) {
+        this.cancelledAmount += cancelled;
+        if (this.cancelledAmount >= this.amount) {
+            this.status = "CANCELLED";
+            this.cancelledAt = at;
+        } else {
+            this.status = "PARTIALLY_CANCELLED";
+        }
     }
 }

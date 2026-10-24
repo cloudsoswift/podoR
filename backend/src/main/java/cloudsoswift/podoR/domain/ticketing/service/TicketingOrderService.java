@@ -31,7 +31,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -156,8 +160,8 @@ public class TicketingOrderService {
                 .totalPrice(total)
                 .status("PAID")
                 .build();
-        for (Long seq : seatSeqs) {
-            order.addItem(TicketingItem.builder().eventSeat(eventSeatRepository.getReferenceById(seq)).build());
+        for (EventSeat es : seats) {
+            order.addItem(TicketingItem.of(es)); // 예매 시점 좌석 정보를 항목에 복사
         }
         ticketingOrderRepository.save(order);
         paymentRepository.save(Payment.builder()
@@ -172,21 +176,56 @@ public class TicketingOrderService {
         return new OrderCreatedResponse(order.getOrderNumber());
     }
 
-    /** 주문 전체 취소: 좌석 AVAILABLE + 주문/결제 CANCELLED. */
+    /** 주문 전체 취소: 남은(취소되지 않은) 항목을 모두 취소한다. */
     @Transactional
     public void cancelOrder(Long userSeq, String orderNumber) {
-        TicketingOrder order = ticketingOrderRepository.findDetailByOrderNumber(orderNumber)
+        TicketingOrder order = findMyOrder(userSeq, orderNumber);
+        cancel(order, order.activeItems());
+    }
+
+    /** 부분 취소: 지정한 항목만 취소. 좌석 AVAILABLE + 주문 금액·상태 + 결제 취소액. */
+    @Transactional
+    public void cancelItems(Long userSeq, String orderNumber, List<Long> itemSeqs) {
+        if (itemSeqs == null || itemSeqs.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "취소할 좌석을 선택해 주세요.");
+        }
+        TicketingOrder order = findMyOrder(userSeq, orderNumber);
+        Map<Long, TicketingItem> bySeq = new HashMap<>();
+        for (TicketingItem item : order.getItems()) bySeq.put(item.getSeq(), item);
+        List<TicketingItem> targets = new ArrayList<>();
+        for (Long seq : new LinkedHashSet<>(itemSeqs)) {
+            TicketingItem item = bySeq.get(seq);
+            if (item == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이 예매의 좌석이 아닙니다: " + seq);
+            }
+            targets.add(item);
+        }
+        cancel(order, targets);
+    }
+
+    private TicketingOrder findMyOrder(Long userSeq, String orderNumber) {
+        return ticketingOrderRepository.findDetailByOrderNumber(orderNumber)
                 .filter(o -> o.getUser().getSeq().equals(userSeq))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        if (!"PAID".equals(order.getStatus())) {
+    }
+
+    private void cancel(TicketingOrder order, List<TicketingItem> targets) {
+        if (!order.isCancellable()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문입니다.");
         }
-        List<Long> seatSeqs = order.getItems().stream().map(i -> i.getEventSeat().getSeq()).toList();
-        long version = seatVersionGenerator.next(order.getEvent().getSeq());
-        eventSeatRepository.updateStatusIfCurrent(seatSeqs, order.getEvent().getSeq(),
-                SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
-        order.cancel();
-        paymentRepository.findByTicketingOrder_Seq(order.getSeq()).ifPresent(Payment::cancel);
+        // 공연장 배치 변경으로 회차 좌석이 지워진 항목은 되돌릴 좌석이 없다.
+        List<Long> seatSeqs = targets.stream()
+                .filter(i -> i.getEventSeat() != null)
+                .map(i -> i.getEventSeat().getSeq())
+                .toList();
+        LocalDateTime now = LocalDateTime.now();
+        int cancelled = order.cancelItems(targets, now);
+        if (!seatSeqs.isEmpty()) {
+            long version = seatVersionGenerator.next(order.getEvent().getSeq());
+            eventSeatRepository.updateStatusIfCurrent(seatSeqs, order.getEvent().getSeq(),
+                    SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
+        }
+        paymentRepository.findByTicketingOrder_Seq(order.getSeq()).ifPresent(p -> p.cancelAmount(cancelled, now));
         snapshotCache.evict(order.getEvent().getEventId());
     }
 

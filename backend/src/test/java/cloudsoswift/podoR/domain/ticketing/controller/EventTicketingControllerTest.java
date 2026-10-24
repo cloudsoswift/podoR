@@ -132,4 +132,25 @@ class EventTicketingControllerTest {
                 .andExpect(status().isNoContent());
         verify(service).cancelOrder(100L, "ORD-1");
     }
+
+    @Test
+    void cancelItems_바디의_항목만_취소_204() throws Exception {
+        mvc.perform(post("/events/EVT1/order/O1/cancel").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketingItemSeqs\":[11,12]}"))
+                .andExpect(status().isNoContent());
+        verify(service).cancelItems(100L, "O1", List.of(11L, 12L));
+    }
+
+    @Test
+    void 같은_주문을_동시에_취소해_낙관적락이_실패하면_409() throws Exception {
+        doThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder.class, 1L))
+                .when(service).cancelItems(anyLong(), anyString(), anyList());
+
+        mvc.perform(post("/events/EVT1/order/O1/cancel").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketingItemSeqs\":[11]}"))
+                .andExpect(status().isConflict());
+    }
 }

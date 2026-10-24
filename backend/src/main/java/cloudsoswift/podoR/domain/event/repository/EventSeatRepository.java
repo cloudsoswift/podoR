@@ -7,9 +7,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface EventSeatRepository extends JpaRepository<EventSeat, Long> {
+
+    // 좌석맵 저장 시 정리 대상: 해당 좌석들의 모든 회차 좌석(삭제된 회차 포함), 회차 fetch join
+    @Query("SELECT es FROM EventSeat es JOIN FETCH es.event WHERE es.seat.seq IN :seatSeqs")
+    List<EventSeat> findAllBySeatSeqIn(@Param("seatSeqs") Collection<Long> seatSeqs);
 
     // 스냅샷/플랜 역산용: 이벤트의 전체 EventSeat (seat fetch join 으로 N+1 회피)
     @Query("SELECT es FROM EventSeat es JOIN FETCH es.seat WHERE es.event.seq = :eventSeq")
