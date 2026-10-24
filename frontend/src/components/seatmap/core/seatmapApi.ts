@@ -3,9 +3,11 @@ import { Section } from "./types";
 import { SeatRow } from "./seatTypes";
 import { rowSeats } from "./rowGeometry";
 
-// 백엔드 좌석 1건. (Seat 엔티티: section/row_number/seat_number/is_available)
+// 백엔드 좌석 1건. (Seat 엔티티: section/section_key/row_number/seat_number/is_available)
+// 좌석 정체성은 (sectionKey, rowNumber, seatNumber) — 섹션 이름을 바꿔도 같은 좌석이다.
 export interface SeatmapSeatItem {
   section: string;
+  sectionKey: string;
   rowNumber: string;
   seatNumber: number;
   isAvailable: boolean;
@@ -17,6 +19,24 @@ export interface SeatmapPayload {
   layoutJson: string;
   // 번호가 있는 좌석 목록(줄에서 계산) — Seat 테이블 평면 투영.
   seats: SeatmapSeatItem[];
+  // 이 저장으로 취소될 예매 좌석 수를 관리자가 확인한 값(409 미리보기를 본 뒤 재전송할 때만).
+  confirmedCancelSeatCount?: number;
+}
+
+// 저장으로 예매가 취소될 때 서버가 409 로 돌려주는 미리보기.
+export const CANCEL_CONFIRM_CODE = "SEATMAP_CANCEL_CONFIRM_REQUIRED";
+export interface SeatmapCancelPreview {
+  code: typeof CANCEL_CONFIRM_CODE;
+  cancelSeatCount: number;
+  cancelOrderCount: number;
+  events: { eventId: string; title: string; eventDate: string; seatCount: number }[];
+}
+
+/** 저장 실패가 "취소 확인 필요(409)"면 미리보기를, 아니면 null. */
+export function cancelPreviewOf(err: unknown): SeatmapCancelPreview | null {
+  const res = (err as { response?: { status?: number; data?: { code?: string } } })?.response;
+  if (res?.status !== 409 || res.data?.code !== CANCEL_CONFIRM_CODE) return null;
+  return res.data as SeatmapCancelPreview;
 }
 
 export interface SeatmapRegisterResult {
@@ -35,8 +55,8 @@ export interface SeatmapDoc {
 
 /**
  * 같은 이름을 가진 섹션 이름 목록(중복분만).
- * 좌석은 섹션 '이름'으로 저장되므로(seat.section), 서로 다른 섹션이 같은 이름이면
- * 좌석 키(section,row,seat)가 충돌해 백엔드 seat_unique 제약을 위반한다. 저장 전 차단용.
+ * 좌석 플랜·예매 좌석맵은 섹션 '이름'으로 좌석을 매칭하므로, 서로 다른 섹션이 같은 이름이면
+ * 구분할 수 없다(백엔드도 400 으로 막는다). 저장 전 차단용.
  */
 export function findDuplicateSectionNames(sections: Section[]): string[] {
   const counts = new Map<string, number>();
@@ -47,7 +67,7 @@ export function findDuplicateSectionNames(sections: Section[]): string[] {
 /**
  * SectionEditor 의 섹션 배치와 줄 에디터의 섹션별 줄을 하나의 등록 JSON 으로 합친다.
  * - layoutJson: 에디터 작업 문서(SeatmapDoc) → 재진입·예매 화면 복원용.
- * - seats: 줄에서 계산한 좌석 중 번호가 있는 것(섹션 이름·줄 이름·번호) → Seat 테이블 투영.
+ * - seats: 줄에서 계산한 좌석 중 번호가 있는 것(섹션 이름·섹션 id·줄 이름·번호) → Seat 테이블 투영.
  *   번호 있는 사용 안 함 좌석은 isAvailable=false, 번호 없는 좌석(건너뛰기)은 보내지 않는다.
  * 이미 삭제된 섹션의 줄은 둘 다에서 뺀다.
  */
@@ -64,7 +84,13 @@ export function buildSeatmapPayload(
     for (const row of rows) {
       for (const s of rowSeats(row)) {
         if (s.number === null) continue;
-        seats.push({ section: sec.name, rowNumber: row.name.trim(), seatNumber: s.number, isAvailable: s.available });
+        seats.push({
+          section: sec.name,
+          sectionKey: sec.id,
+          rowNumber: row.name.trim(),
+          seatNumber: s.number,
+          isAvailable: s.available,
+        });
       }
     }
   }

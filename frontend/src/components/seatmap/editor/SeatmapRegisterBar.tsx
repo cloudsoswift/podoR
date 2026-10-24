@@ -7,9 +7,13 @@ import { SeatRow } from "@/components/seatmap/core/seatTypes";
 import { validateLayout } from "@/components/seatmap/core/layoutValidation";
 import {
   buildSeatmapPayload,
+  cancelPreviewOf,
   findDuplicateSectionNames,
   registerSeatmap,
+  SeatmapCancelPreview,
 } from "@/components/seatmap/core/seatmapApi";
+import ConfirmDialog from "@/components/admin/ConfirmDialog";
+import { formatDateTime } from "@/lib/format";
 
 interface Props {
   venueSeq: number;
@@ -34,6 +38,8 @@ export default function SeatmapRegisterBar({
 }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [showJson, setShowJson] = useState(false);
+  // 저장하면 예매가 취소되는 경우, 서버가 돌려준 미리보기(확인 창).
+  const [cancelPreview, setCancelPreview] = useState<SeatmapCancelPreview | null>(null);
 
   const payload = useMemo(
     () => buildSeatmapPayload(sections, rowsBySection),
@@ -64,14 +70,30 @@ export default function SeatmapRegisterBar({
       });
       return;
     }
+    await submit();
+  }
+
+  // confirmedCancelSeatCount: 확인 창에서 관리자가 본 취소 좌석 수. 서버 계산과 다르면 다시 409.
+  async function submit(confirmedCancelSeatCount?: number) {
     setStatus({ kind: "loading" });
     try {
-      const result = await registerSeatmap(venueSeq, payload);
+      const result = await registerSeatmap(
+        venueSeq,
+        confirmedCancelSeatCount === undefined ? payload : { ...payload, confirmedCancelSeatCount },
+      );
+      setCancelPreview(null);
       setStatus({
         kind: "success",
         message: `저장 완료 — 섹션 ${sections.length}개 · 좌석 ${result.seatCount}석`,
       });
     } catch (err) {
+      const preview = cancelPreviewOf(err);
+      if (preview) {
+        setCancelPreview(preview);
+        setStatus({ kind: "idle" });
+        return;
+      }
+      setCancelPreview(null);
       const ax = err as AxiosError<{ message?: string }>;
       const detail =
         ax.response?.status != null
@@ -137,6 +159,17 @@ export default function SeatmapRegisterBar({
         </ul>
       )}
 
+      <ConfirmDialog
+        open={cancelPreview !== null}
+        title="예매가 취소됩니다"
+        description={cancelPreview ? cancelDescription(cancelPreview) : undefined}
+        confirmText="예매 취소하고 저장"
+        cancelText="돌아가기"
+        loading={status.kind === "loading"}
+        onConfirm={() => cancelPreview && submit(cancelPreview.cancelSeatCount)}
+        onCancel={() => setCancelPreview(null)}
+      />
+
       {showJson && (
         <div className="border-t border-gray-100 px-4 py-2">
           <div className="mb-1 flex items-center justify-between">
@@ -161,4 +194,9 @@ export default function SeatmapRegisterBar({
       )}
     </div>
   );
+}
+
+function cancelDescription(p: SeatmapCancelPreview): string {
+  const events = p.events.map((e) => `${e.title} (${formatDateTime(e.eventDate)}) ${e.seatCount}석`).join(", ");
+  return `이 저장으로 사라지거나 사용 안 함이 된 좌석의 예매, 주문 ${p.cancelOrderCount}건(${p.cancelSeatCount}석)이 취소됩니다. 대상 회차: ${events}`;
 }

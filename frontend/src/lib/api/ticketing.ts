@@ -47,6 +47,12 @@ export async function createOrder(
   return data;
 }
 
+// 남은 좌석 전부 취소
 export async function cancelOrder(eventId: string, orderNumber: string): Promise<void> {
   await apiClient.delete(`/events/${eventId}/order/${orderNumber}`);
+}
+
+// 부분 취소: 고른 좌석(주문 항목)만 취소
+export async function cancelOrderItems(eventId: string, orderNumber: string, ticketingItemSeqs: number[]): Promise<void> {
+  await apiClient.post(`/events/${eventId}/order/${orderNumber}/cancel`, { ticketingItemSeqs });
 }
