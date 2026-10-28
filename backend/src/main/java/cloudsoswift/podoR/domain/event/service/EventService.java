@@ -1,11 +1,14 @@
 package cloudsoswift.podoR.domain.event.service;
 
+import cloudsoswift.podoR.domain.event.cache.EventTicketingDateCache;
 import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.dto.EventCreateRequest;
 import cloudsoswift.podoR.domain.event.dto.EventResponse;
 import cloudsoswift.podoR.domain.event.dto.EventUpdateRequest;
 import cloudsoswift.podoR.domain.event.entity.Event;
+import cloudsoswift.podoR.domain.event.entity.EventSeries;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
+import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.user.service.UserService;
 import cloudsoswift.podoR.domain.venue.entity.Venue;
@@ -26,6 +29,10 @@ public class EventService {
     private final EventRepository eventRepository;
     private final VenueRepository venueRepository;
     private final UserService userService;
+    private final EventSeriesRepository eventSeriesRepository;
+    private final EventTicketingDateCache ticketingDateCache;
+
+    private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
 
     public Page<EventResponse> getList(String keyword, Pageable pageable) {
         String kw = (keyword != null && !keyword.isBlank()) ? keyword.trim() : null;
@@ -36,7 +43,11 @@ public class EventService {
     }
 
     public EventResponse getOne(String eventId) {
-        return new EventResponse(findActiveEvent(eventId));
+        Event event = findActiveEvent(eventId);
+        EventResponse response = new EventResponse(event);
+        eventSeriesRepository.findBySeriesId(event.getSeriesId())
+                .ifPresent(s -> response.setMaxSeatsPerPerson(s.getMaxSeatsPerPerson()));
+        return response;
     }
 
     public Page<EventSeriesResponse> getEventSeries(Pageable pageable) {
@@ -64,7 +75,14 @@ public class EventService {
                 .streamStatus("SCHEDULED")
                 .venue(venue)
                 .build();
-        return new EventResponse(eventRepository.save(event));
+        Event saved = eventRepository.save(event);
+        int max = (request.getMaxSeatsPerPerson() != null && request.getMaxSeatsPerPerson() > 0)
+                ? request.getMaxSeatsPerPerson() : DEFAULT_MAX_SEATS_PER_PERSON;
+        eventSeriesRepository.save(EventSeries.builder()
+                .seriesId(saved.getSeriesId())
+                .maxSeatsPerPerson(max)
+                .build());
+        return new EventResponse(saved);
     }
 
     @Transactional
@@ -73,12 +91,15 @@ public class EventService {
         Venue venue = findVenue(request.getVenueSeq());
         event.update(request.getTitle(), request.getContent(), request.getEventType(),
                 request.getEventDate(), request.getTicketingDate(), venue);
+        // 대기열 폴링이 티켓팅 시각을 캐시에서 읽으므로, 바뀌었으면 즉시 비운다(안 비우면 TTL 만큼 옛 값).
+        ticketingDateCache.evict(eventId);
         return new EventResponse(event);
     }
 
     @Transactional
     public void delete(String eventId) {
         findActiveEvent(eventId).softDelete();
+        ticketingDateCache.evict(eventId);
     }
 
     private Event findActiveEvent(String eventId) {

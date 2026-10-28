@@ -1,17 +1,30 @@
 package cloudsoswift.podoR.domain.event.repository;
 
 import cloudsoswift.podoR.domain.event.entity.EventSeat;
+import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface EventSeatRepository extends JpaRepository<EventSeat, Long> {
 
+    // 좌석맵 저장 시 정리 대상: 해당 좌석들의 모든 회차 좌석(삭제된 회차 포함), 회차 fetch join
+    @Query("SELECT es FROM EventSeat es JOIN FETCH es.event WHERE es.seat.seq IN :seatSeqs")
+    List<EventSeat> findAllBySeatSeqIn(@Param("seatSeqs") Collection<Long> seatSeqs);
+
     // 스냅샷/플랜 역산용: 이벤트의 전체 EventSeat (seat fetch join 으로 N+1 회피)
     @Query("SELECT es FROM EventSeat es JOIN FETCH es.seat WHERE es.event.seq = :eventSeq")
     List<EventSeat> findAllByEventSeqWithSeat(@Param("eventSeq") Long eventSeq);
+
+    /**
+     * 좌석 id만 조회하는 쿼리 (폴링시 seat 조인과 엔티티 생성하는 로직을  피함)
+     */
+    @Query("SELECT es.seq FROM EventSeat es WHERE es.event.seq = :eventSeq")
+    List<Long> findSeqsByEventSeq(@Param("eventSeq") Long eventSeq);
 
     // 증분: change_version 초과분만 (seat fetch join)
     @Query("SELECT es FROM EventSeat es JOIN FETCH es.seat " +
@@ -27,4 +40,15 @@ public interface EventSeatRepository extends JpaRepository<EventSeat, Long> {
     List<EventSeat> findChangesSinceInSection(@Param("eventSeq") Long eventSeq,
                                               @Param("since") Long since,
                                               @Param("section") String section);
+
+    // 조건부 상태 전이(이중판매/이중취소 차단): expected 상태인 좌석만 status 로, change_version 갱신. 반영 행수 반환.
+    // clearAutomatically 는 쓰지 않는다 — 같은 트랜잭션의 order/payment 엔티티 변경이 컨텍스트 초기화로 유실되는 것을 막기 위함.
+    @Modifying
+    @Query("UPDATE EventSeat es SET es.status = :status, es.changeVersion = :version " +
+            "WHERE es.seq IN :seqs AND es.event.seq = :eventSeq AND es.status = :expected")
+    int updateStatusIfCurrent(@Param("seqs") List<Long> seqs,
+                              @Param("eventSeq") Long eventSeq,
+                              @Param("expected") SeatStatus expected,
+                              @Param("status") SeatStatus status,
+                              @Param("version") Long version);
 }

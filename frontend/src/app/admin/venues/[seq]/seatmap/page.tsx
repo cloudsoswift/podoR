@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import SeatmapStudio from "@/components/seatmap/SeatmapStudio";
+import SeatmapStudio from "@/components/seatmap/editor/SeatmapStudio";
 import { getVenue } from "@/lib/api/venues";
 
 export default function VenueSeatmapPage({

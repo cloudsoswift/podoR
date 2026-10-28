@@ -76,10 +76,16 @@ public class JwtTokenProvider {
             log.warn("지원하지 않는 JWT: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             log.warn("잘못된 JWT 형식: {}", e.getMessage());
-        } catch (SecurityException e) {
+        } catch (io.jsonwebtoken.security.SecurityException e) {
+            // 주의: io.jsonwebtoken.* 임포트에는 security 하위 패키지가 포함되지 않는다.
+            // 여기를 java.lang.SecurityException 으로 두면 서명 불일치(SignatureException)가
+            // 잡히지 않고 전파되어, 위조 토큰 요청이 401 이 아니라 500 이 된다.
             log.warn("JWT 서명 오류: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.warn("JWT Claims 비어 있음: {}", e.getMessage());
+        } catch (JwtException e) {
+            // 위에서 다루지 않은 jjwt 예외도 '검증 실패'로 처리한다(예외 누출 방지).
+            log.warn("JWT 검증 실패: {}", e.getMessage());
         }
         return false;
     }

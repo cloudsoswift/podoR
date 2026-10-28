@@ -51,9 +51,9 @@ public class DevDataSeeder implements CommandLineRunner {
                 .user(user)
                 .orderNumber("DEV-" + UUID.randomUUID().toString().substring(0, 8))
                 .totalPrice(total)
-                .status("CONFIRMED")
+                .status("PAID")
                 .build();
-        order.addItem(TicketingItem.builder().eventSeat(seat).build());
+        order.addItem(TicketingItem.of(seat));
         ticketingOrderRepository.save(order);
         log.info("[DevDataSeeder] 더미 예매 1건 생성(user={}, event={})",
                 user.getSeq(), seat.getEvent().getSeq());

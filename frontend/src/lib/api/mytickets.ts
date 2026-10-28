@@ -3,6 +3,7 @@ import apiClient from "@/lib/axios";
 export type DateBasis = "BOOKED" | "WATCHED";
 
 export interface TicketSummary {
+  eventId: string;
   orderNumber: string;
   eventTitle: string;
   venueName: string;
@@ -14,17 +15,21 @@ export interface TicketSummary {
 }
 
 export interface TicketSeat {
+  itemSeq: number;
   section: string;
   rowNumber: string;
   seatNumber: number | null;
   grade: string;
   price: number;
+  status: "PAID" | "CANCELLED";
+  cancelledAt: string | null;
 }
 
 export interface TicketDetail {
+  eventId: string;
   orderNumber: string;
   orderedAt: string;
-  status: string;
+  status: string; // PAID / PARTIALLY_CANCELLED / CANCELLED
   cancelledAt: string | null;
   totalPrice: number;
   eventTitle: string;

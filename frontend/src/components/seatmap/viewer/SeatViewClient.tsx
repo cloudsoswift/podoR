@@ -1,0 +1,180 @@
+"use client";
+
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useSeatViewPolling } from "./useSeatViewPolling";
+import { parseSeatmapDoc } from "@/components/seatmap/core/seatmapApi";
+import { holdSeats, getMySeatQuota, errorDetail } from "@/lib/api/ticketing";
+import SectionMapView from "./SectionMapView";
+import SeatMapView from "./SeatMapView";
+import CheckoutBar from "./CheckoutBar";
+
+/**
+ * Section Viewer(섹션 미선택) ↔ SeatMap Viewer(섹션 선택)를 한 화면에서 오간다.
+ * 두 뷰 모두 에디터와 같은 공용 컴포넌트로 layoutJson 의 섹션 도형·좌석 배치를 그대로 그린다.
+ * 좌석 선택(클라 상태) 후 "결제하기" 로 일괄 선점(Redis) → 결제 페이지로 이동.
+ * SOLD/타인 선점(held) 좌석은 클릭 불가.
+ */
+export default function SeatViewClient({ eventId }: { eventId: string }) {
+  const router = useRouter();
+  const [section, setSection] = useState<string | undefined>(undefined);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [quota, setQuota] = useState<{ used: number; max: number } | null>(null);
+  const [cooling, setCooling] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const { seats, layoutJson, heldSeats, loading, refresh } = useSeatViewPolling(eventId, section);
+
+  const loadQuota = useCallback(() => {
+    getMySeatQuota(eventId).then(setQuota).catch(() => {});
+  }, [eventId]);
+
+  useEffect(() => {
+    loadQuota();
+  }, [loadQuota]);
+  const doc = useMemo(() => parseSeatmapDoc(layoutJson), [layoutJson]);
+  const heldSet = useMemo(() => new Set(heldSeats), [heldSeats]);
+
+  const bySection = useMemo(() => {
+    const m = new Map<string, { total: number; available: number }>();
+    for (const s of seats) {
+      const e = m.get(s.section) ?? { total: 0, available: 0 };
+      e.total++;
+      if (s.status === "AVAILABLE" && !heldSet.has(s.eventSeatSeq)) e.available++;
+      m.set(s.section, e);
+    }
+    return m;
+  }, [seats, heldSet]);
+
+  function toggleSeat(seq: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(seq)) {
+        next.delete(seq);
+        return next;
+      }
+      if (quota) {
+        const remaining = quota.max - quota.used; // 이미 쓴(선점+예매) 좌석 제외 잔여
+        if (next.size >= remaining) {
+          alert(`이 공연은 1인 최대 ${quota.max}석까지 예매할 수 있습니다.`);
+          return prev;
+        }
+      }
+      next.add(seq);
+      return next;
+    });
+  }
+
+  async function handleCheckout() {
+    const seqs = [...selected];
+    if (seqs.length === 0 || checkingOut) return; // 연타로 중복 선점/이동하지 않도록
+    setCheckingOut(true);
+    try {
+      await holdSeats(eventId, seqs);
+      // 선점되면 그 좌석은 클릭 불가(held)가 되어 선택 해제도 못 한다.
+      // 선택을 비워 "결제 바만 남고 빠져나올 수 없는" 상태를 막는다.
+      // (결제 페이지는 URL 쿼리로 좌석을 받으므로 흐름에는 영향 없다.)
+      setSelected(new Set());
+      router.push(`/events/${eventId}/seats/payment?seats=${seqs.join(",")}`);
+    } catch (e) {
+      // 서버가 보낸 실제 사유(한도 초과 / 이미 선점됨 등)를 그대로 보여준다.
+      alert(errorDetail(e, "선택한 좌석 중 일부를 예매할 수 없습니다. 좌석 현황을 다시 확인해주세요."));
+      setSelected(new Set());
+      loadQuota();
+    } finally {
+      setCheckingOut(false);
+    }
+  }
+
+  function handleRefresh() {
+    if (cooling) return;
+    setCooling(true);
+    refresh();
+    loadQuota();
+    setTimeout(() => setCooling(false), 3000);
+  }
+
+  // 선택 좌석 정보(섹션 무관). 좌석 상태는 이벤트 전체를 들고 있어 다른 섹션 좌석도 찾을 수 있다.
+  const selectedSeats = useMemo(
+    () => seats.filter((s) => selected.has(s.eventSeatSeq)),
+    [seats, selected],
+  );
+
+  // 선택이 비면 내려서(언마운트) 다음 선택 때 목록이 접힌 상태로 다시 시작한다.
+  const checkoutBar =
+    selectedSeats.length > 0 ? (
+      <CheckoutBar
+        seats={selectedSeats}
+        checkingOut={checkingOut}
+        onRemove={toggleSeat}
+        onCheckout={handleCheckout}
+      />
+    ) : null;
+
+  // 페이지 흐름 안에 배치한다. fixed 로 띄우면 sticky 헤더(z-50, 불투명)에 가려진다.
+  const quotaBadge = quota ? (
+    <span className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm">
+      현재 {quota.used} / {quota.max}
+    </span>
+  ) : null;
+
+  if (loading) {
+    return <div className="p-8 text-sm text-gray-500">불러오는 중…</div>;
+  }
+
+  if (!section) {
+    return (
+      <div className="p-4 pb-20">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-gray-900">섹션 선택</h2>
+          {quotaBadge}
+        </div>
+        <div className="h-[70vh] overflow-hidden rounded-xl border border-gray-200">
+          <SectionMapView sections={doc.sections} stats={bySection} onSelect={setSection} />
+        </div>
+        {checkoutBar}
+      </div>
+    );
+  }
+
+  const currentSection = doc.sections.find((sec) => sec.name === section);
+  const sectionSeats = seats.filter((s) => s.section === section);
+
+  return (
+    <div className="p-4 pb-20">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button onClick={() => setSection(undefined)} className="text-sm text-indigo-600 hover:underline">
+          ← 전체 섹션
+        </button>
+        <div className="flex items-center gap-2">
+          {quotaBadge}
+          <button
+            onClick={handleRefresh}
+            disabled={cooling}
+            className="rounded-lg border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+          >
+            {cooling ? "새로고침 대기…" : "새로고침"}
+          </button>
+        </div>
+      </div>
+      <h2 className="mb-3 text-lg font-bold text-gray-900">{section}</h2>
+      {currentSection && (
+        <div className="h-[70vh] overflow-hidden rounded-xl border border-gray-200">
+          <SeatMapView
+            section={currentSection}
+            rows={doc.rowsBySection[currentSection.id] ?? []}
+            eventSeats={sectionSeats}
+            held={heldSet}
+            selected={selected}
+            onToggle={toggleSeat}
+          />
+        </div>
+      )}
+      <div className="mt-4 flex gap-3 text-xs text-gray-500">
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-emerald-400 align-middle" />예매가능</span>
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-amber-300 align-middle" />선점중</span>
+        <span><span className="mr-1 inline-block h-3 w-3 rounded bg-gray-300 align-middle" />판매완료</span>
+      </div>
+      {checkoutBar}
+    </div>
+  );
+}

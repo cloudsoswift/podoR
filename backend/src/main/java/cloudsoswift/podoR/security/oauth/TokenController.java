@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequiredArgsConstructor
@@ -36,11 +37,16 @@ public class TokenController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        // 2. RT에서 userSeq 추출 후, 유저 조회한 뒤 새 AT 발급
+        // 2. RT에서 userSeq 추출 후 유저 조회.
+        //    존재하지 않거나 탈퇴한 사용자면 재발급하지 않는다(탈퇴 후에도 RT 로 계속
+        //    새 AT 를 받아가는 것을 막는다). 조회 실패는 500 이 아니라 401 로 응답한다.
         Long userSeq = jwtTokenProvider.getUserSeq(refreshToken);
-        User user = userService.findBySeq(userSeq);
+        Optional<User> user = userService.findActiveBySeq(userSeq);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(userSeq, user.getRole().name());
+        String newAccessToken = jwtTokenProvider.generateAccessToken(userSeq, user.get().getRole().name());
 
         return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
     }

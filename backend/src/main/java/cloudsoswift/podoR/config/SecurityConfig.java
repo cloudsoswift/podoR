@@ -4,6 +4,7 @@ import cloudsoswift.podoR.security.jwt.JwtAuthenticationFilter;
 import cloudsoswift.podoR.security.oauth.CustomOAuth2UserService;
 import cloudsoswift.podoR.security.oauth.OAuth2AuthenticationFailureHandler;
 import cloudsoswift.podoR.security.oauth.OAuth2AuthenticationSuccessHandler;
+import cloudsoswift.podoR.security.oauth.PromptAndRedirectAuthorizationRequestResolver;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +15,8 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -34,7 +37,8 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           OAuth2AuthorizationRequestResolver authorizationRequestResolver) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session ->
@@ -43,12 +47,12 @@ public class SecurityConfig {
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()
                         .requestMatchers("/oauth2/**").permitAll()
                         // 소비자 조회(GET)만 공개 — 쓰기/관리자/`/users/**` 는 보호 유지
+                        // 좌석맵(seat-view)은 대기열 도입으로 로그인 필요로 전환되어 여기서 제외했다.
+                        // 이벤트 목록·상세는 공개로 남긴다 — 비로그인도 공연 정보는 볼 수 있어야 한다.
                         .requestMatchers(HttpMethod.GET,
                                 "/events/series-summary",
                                 "/events/series/*",
                                 "/events/*",
-                                "/events/*/seat-view",
-                                "/events/*/seat-view/changes",
                                 "/venues",
                                 "/venues/*",
                                 "/venues/*/layout",
@@ -74,6 +78,8 @@ public class SecurityConfig {
                         })
                 )
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(authorization ->
+                                authorization.authorizationRequestResolver(authorizationRequestResolver))
                         .redirectionEndpoint(redirection ->
                                 redirection.baseUri("/login/oauth2/code/*"))
                         .userInfoEndpoint(userInfo ->
@@ -85,6 +91,15 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * 매번 계정 선택/로그인 화면을 띄우고, ?redirect= 복귀 경로를 세션에 보관한다.
+     * 자세한 동작은 PromptAndRedirectAuthorizationRequestResolver 참고.
+     */
+    @Bean
+    public OAuth2AuthorizationRequestResolver authorizationRequestResolver(ClientRegistrationRepository repo) {
+        return new PromptAndRedirectAuthorizationRequestResolver(repo);
     }
 
     @Bean

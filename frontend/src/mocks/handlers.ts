@@ -3,7 +3,10 @@ import { http, HttpResponse } from "msw";
 // apiClient(baseURL)와 동일하게 맞춰야 요청이 매칭됨.
 // MSW는 상대경로를 location.origin(:3000)에 붙여 해석하므로,
 // :8080으로 나가는 apiClient 요청을 잡으려면 절대 URL prefix가 필요하다.
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// apiClient(baseURL)와 반드시 동일해야 요청이 매칭된다.
+// 테스트에서도 이 값을 import 해서 쓸 것 — URL 을 하드코딩하면 baseURL 변경(예: /api 추가)을
+// 테스트가 못 잡고, 오히려 테스트만 깨진다.
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 const mockUser = {
   email: "test@test.com",
@@ -160,6 +163,25 @@ export const handlers = [
     const venue = mockVenues.find((v) => v.seq === Number(params.venueId));
     if (!venue) return new HttpResponse(null, { status: 404 });
     return HttpResponse.json(venue);
+  }),
+
+  // 대기열 - 입장/폴링. 기본은 바로 입장(ADMITTED). 대기·오픈 전은 테스트에서 server.use 로 덮어쓴다.
+  http.post(`${BASE_URL}/events/:eventId/queue`, () => {
+    return HttpResponse.json({
+      status: "ADMITTED",
+      passExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+      opensAt: "2026-01-01T00:00:00",
+    });
+  }),
+
+  // 대기열 - 이탈
+  http.delete(`${BASE_URL}/events/:eventId/queue`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  // 티켓팅 - 내 좌석 quota (이 시리즈에서 쓴 좌석수 / 1인 최대)
+  http.get(`${BASE_URL}/events/:eventId/my-seat-quota`, () => {
+    return HttpResponse.json({ used: 0, max: 4 });
   }),
 
   // 공연장의 이벤트 목록 (최신순)

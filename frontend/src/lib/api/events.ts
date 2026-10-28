@@ -16,6 +16,7 @@ export interface EventItem {
   venueName: string;
   hostSeq: number;
   hostNickname: string;
+  maxSeatsPerPerson?: number;
 }
 
 export interface EventUpdatePayload {
@@ -25,6 +26,7 @@ export interface EventUpdatePayload {
   eventDate: string;
   ticketingDate: string;
   venueSeq: number;
+  maxSeatsPerPerson?: number;
 }
 
 // 생성 요청은 수정과 동일한 필드 (host 는 서버에서 인증 주체로 설정)

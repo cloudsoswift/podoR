@@ -14,6 +14,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // CustomOAuth2UserService에서 사용
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
 
+    // 인증 경로용: 탈퇴(soft delete)한 사용자는 조회되지 않아야 한다.
+    // (어드민 상세/삭제는 탈퇴 사용자도 봐야 하므로 findById 를 그대로 쓴다.)
+    Optional<User> findBySeqAndDeletedAtIsNull(Long seq);
+
     // Admin: 삭제되지 않은 사용자 전체 (검색어 없음)
     Page<User> findByDeletedAtIsNull(Pageable pageable);
 

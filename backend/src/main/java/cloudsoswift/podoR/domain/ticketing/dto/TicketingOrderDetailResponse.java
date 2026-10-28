@@ -10,6 +10,7 @@ import java.util.List;
 /** 예매 상세: 공연 간략 + 예매 정보 + 좌석 목록. */
 @Getter
 public class TicketingOrderDetailResponse {
+    private final String eventId;
     private final String orderNumber;
     private final LocalDateTime orderedAt;
     private final String status;
@@ -21,6 +22,7 @@ public class TicketingOrderDetailResponse {
     private final List<Seat> seats;
 
     public TicketingOrderDetailResponse(TicketingOrder o) {
+        this.eventId = o.getEvent().getEventId();
         this.orderNumber = o.getOrderNumber();
         this.orderedAt = o.getOrderedAt();
         this.status = o.getStatus();
@@ -32,22 +34,27 @@ public class TicketingOrderDetailResponse {
         this.seats = o.getItems().stream().map(Seat::new).toList();
     }
 
+    /** 좌석 정보는 예매 시점 스냅샷에서 읽는다(회차 좌석이 지워져도 표시). */
     @Getter
     public static class Seat {
+        private final Long itemSeq;
         private final String section;
         private final String rowNumber;
         private final Integer seatNumber;
         private final String grade;
         private final Integer price;
+        private final String status;          // PAID / CANCELLED
+        private final LocalDateTime cancelledAt;
 
         public Seat(TicketingItem item) {
-            var es = item.getEventSeat();
-            var seat = es.getSeat();
-            this.section = seat.getSection();
-            this.rowNumber = seat.getRowNumber();
-            this.seatNumber = seat.getSeatNumber();
-            this.grade = es.getSeatGrade();
-            this.price = es.getPrice();
+            this.itemSeq = item.getSeq();
+            this.section = item.getSection();
+            this.rowNumber = item.getRowNumber();
+            this.seatNumber = item.getSeatNumber();
+            this.grade = item.getSeatGrade();
+            this.price = item.getPrice();
+            this.status = item.getStatus();
+            this.cancelledAt = item.getCancelledAt();
         }
     }
 }
