@@ -8,6 +8,8 @@ interface EventFormModalProps {
   event: EventItem | null; // null = 생성 모드
   onSubmit: (payload: EventUpdatePayload) => Promise<void>;
   onCancel: () => void;
+  /** 공연장 검색 창 경로. HOST 화면은 /admin 에 들어갈 수 없어 따로 넘긴다. */
+  venueSearchPath?: string;
 }
 
 // ISO -> datetime-local 입력값("YYYY-MM-DDTHH:mm")
@@ -18,7 +20,13 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function EventFormModal({ open, event, onSubmit, onCancel }: EventFormModalProps) {
+export default function EventFormModal({
+  open,
+  event,
+  onSubmit,
+  onCancel,
+  venueSearchPath = "/admin/venues/search",
+}: EventFormModalProps) {
   const isEdit = !!event;
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -119,7 +127,7 @@ export default function EventFormModal({ open, event, onSubmit, onCancel }: Even
               <button
                 type="button"
                 onClick={() =>
-                  window.open("/admin/venues/search", "venue-search", "width=520,height=640")
+                  window.open(venueSearchPath, "venue-search", "width=520,height=640")
                 }
                 className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
