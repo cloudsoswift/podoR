@@ -45,6 +45,7 @@ public class EventController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('HOST','ADMIN')")
     public ResponseEntity<EventResponse> create(@RequestBody EventCreateRequest request,
                                                 Authentication authentication) {
         Long userSeq = (Long) authentication.getPrincipal();

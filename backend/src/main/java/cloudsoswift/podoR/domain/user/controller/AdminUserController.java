@@ -2,6 +2,8 @@ package cloudsoswift.podoR.domain.user.controller;
 
 import cloudsoswift.podoR.domain.user.dto.AdminUserDetailResponse;
 import cloudsoswift.podoR.domain.user.dto.AdminUserListResponse;
+import cloudsoswift.podoR.domain.user.dto.RoleChangeRequest;
+import org.springframework.security.core.Authentication;
 import cloudsoswift.podoR.domain.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,6 +30,14 @@ public class AdminUserController {
     @GetMapping("/{seq}")
     public ResponseEntity<AdminUserDetailResponse> getUser(@PathVariable Long seq) {
         return ResponseEntity.ok(userService.getUserDetail(seq));
+    }
+
+    @PatchMapping("/{seq}/role")
+    public ResponseEntity<Void> changeRole(@PathVariable Long seq,
+                                           @RequestBody RoleChangeRequest request,
+                                           Authentication authentication) {
+        userService.changeRole((Long) authentication.getPrincipal(), seq, request.role());
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{seq}")
