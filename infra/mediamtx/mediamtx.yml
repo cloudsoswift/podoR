@@ -1,0 +1,28 @@
+# podoR MediaMTX 설정. 기본값과 다른 것만 적는다.
+# 송출 허가 주소(authHTTPAddress)는 내부 토큰이 들어가므로 compose env MTX_AUTHHTTPADDRESS 로 주입한다.
+
+logLevel: info
+
+# OBS → RTMP 만 받는다. 시청은 MediaMTX 가 아니라 nginx 가 HLS 파일을 직접 내준다.
+rtmp: yes
+rtmpAddress: :1935
+rtsp: no
+hls: no
+webrtc: no
+srt: no
+
+# 송출(publish)·읽기(read) 허가를 Spring 에 묻는다. read 는 내부 ffmpeg(127.0.0.1)만 허가된다.
+authMethod: http
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+paths:
+  # OBS 서버 rtmp://<host>/live, 스트림 키 {key} → 경로 live/{key}
+  "~^live/(.+)$":
+    # 송출이 시작되면 Spring 에 세션을 만들고 ffmpeg 로 HLS 를 쓴다(스크립트가 ffmpeg 로 exec).
+    runOnReady: /scripts/on-ready.sh
+    runOnReadyRestart: no
+    # 송출이 끊기면 Spring 에 알린다(INTERRUPTED, 유예 시간 뒤 종료 확정).
+    runOnNotReady: /scripts/on-not-ready.sh

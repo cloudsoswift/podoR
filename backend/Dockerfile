@@ -9,6 +9,10 @@ RUN chmod +x gradlew && ./gradlew clean bootJar -x test --no-daemon
 
 # ── run stage ────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre
+# VOD 변환(HLS 조각 → mp4, 재인코딩 없음)에 ffmpeg 가 필요하다.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 EXPOSE 8080

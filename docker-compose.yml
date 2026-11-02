@@ -1,8 +1,9 @@
 # =====================================================================
-# 컨테이너 6종: nginx · postgres · redis · spring · next · jenkins
+# 컨테이너 7종: nginx · postgres · redis · spring · next · mediamtx · jenkins
 #
 # 단일 오리진 구성: nginx 가 443 하나로 TLS 종단 후
-#   /      -> next(3000),  /api/ -> spring(8080)
+#   /      -> next(3000),  /api/ -> spring(8080),  /media/ -> media 볼륨(HLS·VOD, 쿠키 검사)
+# 라이브 송출: OBS -> mediamtx:1935(RTMP) -> ffmpeg 가 media 볼륨에 HLS 를 쓴다.
 # spring/next 는 외부 포트를 열지 않고 nginx 뒤에서만 접근된다.
 #
 # 사용:
@@ -66,12 +67,43 @@ services:
       # ticketingDate·입장권 만료 등 LocalDateTime 이 KST 벽시계 기준이므로 JVM 타임존을 고정한다.
       # (컨테이너 기본값은 UTC → 응답 시각이 9시간 어긋나 대기열 게이트가 무한 재입장한다)
       TZ: Asia/Seoul
+      # 스트리밍 비밀값(.env). relaxed binding: STREAM_INTERNALTOKEN -> stream.internal-token
+      STREAM_INTERNALTOKEN: ${STREAM_INTERNAL_TOKEN}
+      STREAM_MEDIACOOKIESECRET: ${STREAM_MEDIA_COOKIE_SECRET}
+    volumes:
+      # VOD 변환(ffmpeg)이 HLS 조각을 읽고 /media/vod 에 mp4 를 쓴다.
+      - media_data:/media
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     # 외부 포트 노출 안 함 — nginx 프록시 뒤에서 spring:8080 으로만 접근
+    networks: [app-net]
+
+  mediamtx:
+    build:
+      context: ./infra/mediamtx
+    container_name: home-mediamtx
+    restart: unless-stopped
+    ports:
+      - "1935:1935"   # OBS RTMP 송출
+    # Intel Quick Sync(VAAPI). /dev/dri 가 없는 PC(로컬 Windows 등)에서는 이 블록을 지우고
+    # STREAM_ENCODER=x264 로 띄운다.
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      # 송출 허가 주소. authHTTPAddress 는 헤더를 못 붙여 토큰을 쿼리로 넘긴다.
+      MTX_AUTHHTTPADDRESS: http://spring:8080/api/internal/stream/publish-auth?token=${STREAM_INTERNAL_TOKEN}
+      STREAM_INTERNAL_TOKEN: ${STREAM_INTERNAL_TOKEN}
+      SPRING_URL: http://spring:8080
+      STREAM_ENCODER: ${STREAM_ENCODER:-vaapi}
+      LIBVA_DRIVER_NAME: iHD
+    volumes:
+      - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+      - media_data:/media
+    depends_on:
+      - spring
     networks: [app-net]
 
   next:
@@ -99,6 +131,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certs:/etc/nginx/certs:ro   # tls.crt / tls.key (git 미추적)
+      - media_data:/srv/media:ro      # HLS·VOD 배포(쿠키 검사 후)
     depends_on:
       - spring
       - next
@@ -121,6 +154,7 @@ services:
 volumes:
   postgres_data:
   jenkins_home:
+  media_data:     # /hls/{eventId}/{sessionNo}/…, /vod/{eventId}.mp4
 
 networks:
   app-net:
