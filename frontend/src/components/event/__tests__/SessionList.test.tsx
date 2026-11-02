@@ -56,6 +56,19 @@ test("로그인하지 않았으면 로그인 후 좌석으로 돌아오는 링�
   );
 });
 
+test("관람_가능_회차에만_관람하기_링크", () => {
+  useAuthStore.getState().setAccessToken("T");
+
+  render(
+    <SessionList sessions={[session("E1", -1000), session("E2", -1000)]} watchableIds={new Set(["E2"])} />,
+  );
+
+  const links = screen.getAllByRole("link", { name: /관람하기/ });
+  expect(links).toHaveLength(1);
+  expect(links[0]).toHaveAttribute("href", "/events/E2/stream");
+  expect(screen.getAllByRole("link", { name: /예매하기/ })).toHaveLength(2);
+});
+
 test("회차가 없으면 안내 문구를 보여준다", () => {
   render(<SessionList sessions={[]} />);
 

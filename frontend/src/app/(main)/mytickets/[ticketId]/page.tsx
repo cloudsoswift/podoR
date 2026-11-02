@@ -97,10 +97,20 @@ export default function MyTicketDetailPage({
     <div className="space-y-6">
       <Link href="/mypage" className="text-sm text-indigo-600 hover:underline">← 마이페이지</Link>
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{ticket.eventTitle}</h1>
-        <p className="mt-1 text-sm text-gray-500">{ticket.venueName}</p>
-        <p className="mt-1 text-sm text-gray-400">관람 {formatDateTime(ticket.eventDate)}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{ticket.eventTitle}</h1>
+          <p className="mt-1 text-sm text-gray-500">{ticket.venueName}</p>
+          <p className="mt-1 text-sm text-gray-400">관람 {formatDateTime(ticket.eventDate)}</p>
+        </div>
+        {ticket.seats.some((s) => s.status === "PAID") && (
+          <Link
+            href={`/events/${ticket.eventId}/stream`}
+            className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            관람하기
+          </Link>
+        )}
       </div>
 
       <dl className="rounded-xl border border-gray-200 bg-white p-4 text-sm">

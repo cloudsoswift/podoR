@@ -86,6 +86,20 @@ test("좌석을 골라 부분 취소하면 그 itemSeq 만 보내고 다시 불�
   expect(screen.getByText("20,000원")).toBeInTheDocument();
 });
 
+test("PAID_좌석이_있으면_관람하기", async () => {
+  stub([ticket({ status: "PARTIALLY_CANCELLED", seats: [seat(11, 1), seat(12, 2, "CANCELLED")] })]);
+  await renderPage();
+
+  expect(screen.getByRole("link", { name: "관람하기" })).toHaveAttribute("href", "/events/E1/stream");
+});
+
+test("전부_취소면_관람하기_없음", async () => {
+  stub([ticket({ status: "CANCELLED", seats: [seat(11, 1, "CANCELLED")] })]);
+  await renderPage();
+
+  expect(screen.queryByRole("link", { name: "관람하기" })).not.toBeInTheDocument();
+});
+
 test("취소된 좌석은 선택할 수 없고 취소됨으로 표시", async () => {
   stub([ticket({ status: "PARTIALLY_CANCELLED", seats: [seat(11, 1), seat(12, 2, "CANCELLED")] })]);
   await renderPage();
