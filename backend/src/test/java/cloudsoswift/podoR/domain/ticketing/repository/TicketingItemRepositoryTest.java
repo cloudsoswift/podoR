@@ -52,6 +52,22 @@ class TicketingItemRepositoryTest {
     }
 
     @Test
+    void 관람_가능_회차는_PAID_항목이_있는_회차만() {
+        Event paid = em.persist(EntityFixtures.event(user, venue, "E1", "S1"));
+        Event cancelled = em.persist(EntityFixtures.event(user, venue, "E2", "S1"));
+        Event otherSeries = em.persist(EntityFixtures.event(user, venue, "E3", "S2"));
+        addItem(paid, user, "O1", "PAID");
+        addItem(paid, user, "O2", "PAID"); // 같은 회차 두 주문 → 한 번만
+        addItem(cancelled, user, "O3", "CANCELLED");
+        addItem(otherSeries, user, "O4", "PAID");
+        em.flush();
+
+        assertThat(repo.findWatchableEventIds(user.getSeq(), "S1")).containsExactly("E1");
+        assertThat(repo.existsPaidItem(user.getSeq(), paid.getSeq())).isTrue();
+        assertThat(repo.existsPaidItem(user.getSeq(), cancelled.getSeq())).isFalse();
+    }
+
+    @Test
     void 부분취소된_항목은_집계에서_제외() {
         Event e = em.persist(EntityFixtures.event(user, venue, "E1", "S1"));
         TicketingOrder order = em.persist(EntityFixtures.order(e, user, "O1", "PAID"));

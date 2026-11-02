@@ -18,6 +18,16 @@ public interface TicketingItemRepository extends JpaRepository<TicketingItem, Lo
            "WHERE o.user.seq = :userSeq AND ti.status = 'PAID' AND e.seriesId = :seriesId")
     long countPaidSeatsInSeries(@Param("userSeq") Long userSeq, @Param("seriesId") String seriesId);
 
+    // 관람 자격: 그 회차에 취소되지 않은 좌석이 하나라도 있는지(부분 취소 후 남은 좌석 포함).
+    @Query("SELECT COUNT(ti) > 0 FROM TicketingItem ti JOIN ti.ticketingOrder o " +
+           "WHERE o.user.seq = :userSeq AND o.event.seq = :eventSeq AND ti.status = 'PAID'")
+    boolean existsPaidItem(@Param("userSeq") Long userSeq, @Param("eventSeq") Long eventSeq);
+
+    // 공연 상세의 "관람하기" 버튼: 이 시리즈에서 내가 볼 수 있는 회차
+    @Query("SELECT DISTINCT e.eventId FROM TicketingItem ti JOIN ti.ticketingOrder o JOIN o.event e " +
+           "WHERE o.user.seq = :userSeq AND e.seriesId = :seriesId AND ti.status = 'PAID'")
+    List<String> findWatchableEventIds(@Param("userSeq") Long userSeq, @Param("seriesId") String seriesId);
+
     // 좌석맵 저장 시 정리할 회차 좌석을 참조하는 항목(취소된 것 포함). 주문·회차·결제를 함께 읽는다.
     @Query("SELECT ti FROM TicketingItem ti " +
            "JOIN FETCH ti.ticketingOrder o JOIN FETCH o.event LEFT JOIN FETCH o.payment " +
