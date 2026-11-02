@@ -1,5 +1,7 @@
 package cloudsoswift.podoR.domain.event.entity;
 
+import cloudsoswift.podoR.domain.stream.entity.StreamStatus;
+import cloudsoswift.podoR.domain.stream.entity.VodStatus;
 import cloudsoswift.podoR.domain.venue.entity.Venue;
 import cloudsoswift.podoR.domain.user.entity.User;
 import jakarta.persistence.*;
@@ -57,9 +59,15 @@ public class Event {
     @Column(name = "stream_key", length = 255)
     private String streamKey;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "stream_status", length = 20)
-    @Comment("SCHEDULED, LIVE, ENDED")
-    private String streamStatus;
+    @Comment("SCHEDULED, LIVE, INTERRUPTED, ENDED")
+    private StreamStatus streamStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vod_status", nullable = false, length = 20)
+    @Comment("NONE, PROCESSING, READY, FAILED")
+    private VodStatus vodStatus = VodStatus.NONE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "venue_seq", nullable = false)
@@ -73,7 +81,7 @@ public class Event {
     @Builder
     public Event(User host, String eventId, String seriesId, String title, String content,
                  String eventType, LocalDateTime eventDate, LocalDateTime ticketingDate,
-                 String streamKey, String streamStatus, Venue venue) {
+                 String streamKey, StreamStatus streamStatus, Venue venue) {
         this.host = host;
         this.eventId = eventId;
         this.seriesId = seriesId;
@@ -97,8 +105,13 @@ public class Event {
         this.venue = venue;
     }
 
-    public void updateStreamStatus(String status) {
-        this.streamStatus = status;
+    public void issueStreamKey(String key) {
+        this.streamKey = key;
+    }
+
+    /** 스트리밍 도입 전 회차는 stream_status 가 NULL 일 수 있다 — 송출 전으로 본다. */
+    public StreamStatus effectiveStreamStatus() {
+        return streamStatus != null ? streamStatus : StreamStatus.SCHEDULED;
     }
 
     public void softDelete() {

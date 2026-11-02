@@ -4,7 +4,10 @@ import cloudsoswift.podoR.domain.event.dto.EventSeriesResponse;
 import cloudsoswift.podoR.domain.event.entity.Event;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import cloudsoswift.podoR.domain.stream.entity.StreamStatus;
+import cloudsoswift.podoR.domain.stream.entity.VodStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -28,6 +31,37 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e WHERE e.deletedDate IS NULL AND " +
             "LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     Page<Event> searchActiveEvents(@Param("keyword") String keyword, Pageable pageable);
+
+    // ===== 스트리밍 =====
+
+    Optional<Event> findByStreamKeyAndDeletedDateIsNull(String streamKey);
+
+    java.util.List<Event> findAllByHost_SeqAndDeletedDateIsNullOrderByEventDateDesc(Long hostSeq);
+
+    java.util.List<Event> findAllByVodStatus(VodStatus vodStatus);
+
+    long countByStreamStatusInAndSeqNot(java.util.Collection<StreamStatus> statuses, Long seq);
+
+    // 조건부 상태 전이(compare-and-set). 콜백·스케줄러·종료 버튼이 겹쳐도 하나만 이긴다.
+    // 스트리밍 도입 전 회차는 stream_status 가 NULL 이라 IN 으로는 못 잡으므로 allowNull 로 따로 받는다.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Event e SET e.streamStatus = :to WHERE e.seq = :seq AND " +
+            "(e.streamStatus IN :from OR (:allowNull = true AND e.streamStatus IS NULL))")
+    int transitStreamStatus(@Param("seq") Long seq,
+                            @Param("from") java.util.Collection<StreamStatus> from,
+                            @Param("allowNull") boolean allowNull,
+                            @Param("to") StreamStatus to);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Event e SET e.vodStatus = :to WHERE e.seq = :seq AND e.vodStatus IN :from")
+    int transitVodStatus(@Param("seq") Long seq,
+                         @Param("from") java.util.Collection<VodStatus> from,
+                         @Param("to") VodStatus to);
+
+    // 끊긴 채 유예 시간을 넘긴 회차. 끊긴 시각은 마지막 세션의 ended_at 이다.
+    @Query("SELECT e.seq FROM Event e WHERE e.streamStatus = cloudsoswift.podoR.domain.stream.entity.StreamStatus.INTERRUPTED " +
+            "AND (SELECT MAX(s.endedAt) FROM StreamSession s WHERE s.event = e) < :cutoff")
+    java.util.List<Long> findInterruptedSince(@Param("cutoff") java.time.LocalDateTime cutoff);
 
     // 공연 시리즈 목록: series_id 그룹의 대표(가장 이른 회차) 1건 + 회차 수
     @Query("SELECT new cloudsoswift.podoR.domain.event.dto.EventSeriesResponse(" +

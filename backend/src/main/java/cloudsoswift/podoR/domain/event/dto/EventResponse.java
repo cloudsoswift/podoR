@@ -32,7 +32,7 @@ public class EventResponse {
         this.eventType = event.getEventType();
         this.eventDate = event.getEventDate();
         this.ticketingDate = event.getTicketingDate();
-        this.streamStatus = event.getStreamStatus();
+        this.streamStatus = event.getStreamStatus() != null ? event.getStreamStatus().name() : null;
         this.createdDate = event.getCreatedDate();
         this.venueSeq = event.getVenue().getSeq();
         this.venueName = event.getVenue().getName();
