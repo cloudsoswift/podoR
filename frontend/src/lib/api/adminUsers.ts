@@ -32,6 +32,12 @@ export async function getUser(seq: number): Promise<AdminUserDetail> {
   return data;
 }
 
+export type UserRole = "USER" | "HOST" | "ADMIN";
+
+export async function changeUserRole(seq: number, role: UserRole): Promise<void> {
+  await apiClient.patch(`/admin/users/${seq}/role`, { role });
+}
+
 export async function deleteUser(seq: number): Promise<void> {
   await apiClient.delete(`/admin/users/${seq}`);
 }

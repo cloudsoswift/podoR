@@ -19,6 +19,8 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isLoggedIn = mounted && !!accessToken;
+  // 메뉴 노출용(UX). 실제 접근은 /host 페이지의 RoleGuard 가 서버 role 로 판정한다.
+  const isHost = isLoggedIn && (user?.role === "HOST" || user?.role === "ADMIN");
 
   const handleLogout = async () => {
     try {
@@ -41,6 +43,9 @@ export default function Header() {
             <Link href="/" className="hover:text-indigo-600">홈</Link>
             <Link href="/events" className="hover:text-indigo-600">공연</Link>
             <Link href="/venues" className="hover:text-indigo-600">공연장</Link>
+            {isHost && (
+              <Link href="/host/events" className="hover:text-indigo-600">내 공연</Link>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-3">
