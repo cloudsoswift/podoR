@@ -10,6 +10,8 @@ rtsp: no
 hls: no
 webrtc: no
 srt: no
+# 1.21 부터 기본으로 켜지는 MoQ(Media over QUIC) 서버. 쓰지 않으므로 끈다.
+moq: no
 
 # 송출(publish)·읽기(read) 허가를 Spring 에 묻는다. read 는 내부 ffmpeg(127.0.0.1)만 허가된다.
 authMethod: http
@@ -22,7 +24,8 @@ paths:
   # OBS 서버 rtmp://<host>/live, 스트림 키 {key} → 경로 live/{key}
   "~^live/(.+)$":
     # 송출이 시작되면 Spring 에 세션을 만들고 ffmpeg 로 HLS 를 쓴다(스크립트가 ffmpeg 로 exec).
-    runOnReady: /scripts/on-ready.sh
-    runOnReadyRestart: no
+    # (1.21 에서 runOnReady/runOnNotReady 가 runOnAvailable/runOnUnavailable 로 이름이 바뀌었다)
+    runOnAvailable: /scripts/on-ready.sh
+    runOnAvailableRestart: no
     # 송출이 끊기면 Spring 에 알린다(INTERRUPTED, 유예 시간 뒤 종료 확정).
-    runOnNotReady: /scripts/on-not-ready.sh
+    runOnUnavailable: /scripts/on-not-ready.sh

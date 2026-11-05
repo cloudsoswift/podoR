@@ -98,6 +98,8 @@ services:
       STREAM_INTERNAL_TOKEN: ${STREAM_INTERNAL_TOKEN}
       SPRING_URL: http://spring:8080
       STREAM_ENCODER: ${STREAM_ENCODER:-vaapi}
+      # 비우면 Intel 렌더 노드를 자동으로 찾는다(GPU 가 여러 개면 renderD128 이 Intel 이 아닐 수 있음)
+      STREAM_VAAPI_DEVICE: ${STREAM_VAAPI_DEVICE:-}
       LIBVA_DRIVER_NAME: iHD
     volumes:
       - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro

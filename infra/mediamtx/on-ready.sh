@@ -1,6 +1,7 @@
 #!/bin/sh
 # 송출 시작: Spring 에 알려 출력 폴더(/media/hls/{eventId}/{sessionNo})를 받고, 원본 + 480p HLS 를 쓴다.
-# env: MTX_PATH(live/{key}), SPRING_URL, STREAM_INTERNAL_TOKEN, STREAM_ENCODER(vaapi|x264)
+# env: MTX_PATH(live/{key}), SPRING_URL, STREAM_INTERNAL_TOKEN, STREAM_ENCODER(vaapi|x264),
+#      STREAM_VAAPI_DEVICE(선택, 기본은 Intel 렌더 노드 자동 탐색)
 set -eu
 
 KEY="${MTX_PATH#live/}"
@@ -14,9 +15,24 @@ mkdir -p "$OUT/src" "$OUT/480p"
 
 IN="rtmp://127.0.0.1:1935/${MTX_PATH}"
 
+# Intel GPU(i915) 렌더 노드를 찾는다. 다른 GPU(예: NVIDIA)가 함께 있으면 renderD128 이 Intel 이
+# 아닐 수 있고, 번호는 부팅마다 바뀔 수 있다. STREAM_VAAPI_DEVICE 를 주면 그 값을 쓴다.
+find_intel_render_node() {
+  for node in /dev/dri/renderD*; do
+    driver=$(basename "$(readlink -f "/sys/class/drm/$(basename "$node")/device/driver")" 2>/dev/null || true)
+    if [ "$driver" = "i915" ] || [ "$driver" = "xe" ]; then
+      echo "$node"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # 480p 인코더. 원본(v:0)은 재인코딩 없이 그대로 복사한다.
 if [ "${STREAM_ENCODER:-vaapi}" = "vaapi" ]; then
-  HW="-vaapi_device /dev/dri/renderD128"
+  DEVICE="${STREAM_VAAPI_DEVICE:-$(find_intel_render_node || echo /dev/dri/renderD128)}"
+  echo "on-ready: VAAPI device $DEVICE" >&2
+  HW="-vaapi_device $DEVICE"
   V1="-filter:v:1 format=nv12,hwupload,scale_vaapi=w=-2:h=480 -c:v:1 h264_vaapi"
 else
   HW=""
