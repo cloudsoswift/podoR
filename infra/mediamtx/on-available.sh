@@ -29,11 +29,14 @@ find_intel_render_node() {
 }
 
 # 480p 인코더. 원본(v:0)은 재인코딩 없이 그대로 복사한다.
+# vaapi: 디코딩/화질 축소/인코딩을 모두 GPU에서 하도록 `-hwaccel` 옵션을 추가한다.
+#        이렇게 하면, 디코딩한 프레임이 GPU 메모리에 그대로 남아(hwaccel_output_format vaapi)
+#        기존처럼 CPU로 내려왔다 다시 올라가지 않는다.
 if [ "${STREAM_ENCODER:-vaapi}" = "vaapi" ]; then
   DEVICE="${STREAM_VAAPI_DEVICE:-$(find_intel_render_node || echo /dev/dri/renderD128)}"
-  echo "on-ready: VAAPI device $DEVICE" >&2
-  HW="-vaapi_device $DEVICE"
-  V1="-filter:v:1 format=nv12,hwupload,scale_vaapi=w=-2:h=480 -c:v:1 h264_vaapi"
+  echo "on-available: VAAPI device $DEVICE" >&2
+  HW="-hwaccel vaapi -hwaccel_device $DEVICE -hwaccel_output_format vaapi"
+  V1="-filter:v:1 scale_vaapi=w=-2:h=480 -c:v:1 h264_vaapi"
 else
   HW=""
   V1="-filter:v:1 scale=-2:480 -c:v:1 libx264 -preset veryfast"

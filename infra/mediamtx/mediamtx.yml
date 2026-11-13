@@ -25,7 +25,7 @@ paths:
   "~^live/(.+)$":
     # 송출이 시작되면 Spring 에 세션을 만들고 ffmpeg 로 HLS 를 쓴다(스크립트가 ffmpeg 로 exec).
     # (1.21 에서 runOnReady/runOnNotReady 가 runOnAvailable/runOnUnavailable 로 이름이 바뀌었다)
-    runOnAvailable: /scripts/on-ready.sh
+    runOnAvailable: /scripts/on-available.sh
     runOnAvailableRestart: no
     # 송출이 끊기면 Spring 에 알린다(INTERRUPTED, 유예 시간 뒤 종료 확정).
-    runOnUnavailable: /scripts/on-not-ready.sh
+    runOnUnavailable: /scripts/on-unavailable.sh

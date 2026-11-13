@@ -7,5 +7,5 @@ FROM bluenviron/mediamtx:1.21.2-ffmpeg
 
 RUN apk add --no-cache curl jq intel-media-driver
 
-COPY on-ready.sh on-not-ready.sh /scripts/
+COPY on-available.sh on-unavailable.sh /scripts/
 RUN chmod +x /scripts/*.sh
