@@ -32,23 +32,27 @@ find_intel_render_node() {
 # vaapi: 디코딩/화질 축소/인코딩을 모두 GPU에서 하도록 `-hwaccel` 옵션을 추가한다.
 #        이렇게 하면, 디코딩한 프레임이 GPU 메모리에 그대로 남아(hwaccel_output_format vaapi)
 #        기존처럼 CPU로 내려왔다 다시 올라가지 않는다.
+# 480p는 30fps로 고정한다. 입력 프레임레이트와 관계없이, `-g:v:1 60`이 키프레임 2초 간격이 된다.
+# 또한, fps를 축소보다 앞에 두어 버릴 프레임은 축소하지 않는다.
 if [ "${STREAM_ENCODER:-vaapi}" = "vaapi" ]; then
   DEVICE="${STREAM_VAAPI_DEVICE:-$(find_intel_render_node || echo /dev/dri/renderD128)}"
   echo "on-available: VAAPI device $DEVICE" >&2
   HW="-hwaccel vaapi -hwaccel_device $DEVICE -hwaccel_output_format vaapi"
-  V1="-filter:v:1 scale_vaapi=w=-2:h=480 -c:v:1 h264_vaapi"
+  V1="-filter:v:1 fps=30,scale_vaapi=w=-2:h=480 -c:v:1 h264_vaapi"
 else
   HW=""
-  V1="-filter:v:1 scale=-2:480 -c:v:1 libx264 -preset veryfast"
+  V1="-filter:v:1 fps=30,scale=-2:480 -c:v:1 libx264 -preset veryfast"
 fi
 
+# 음성은 두 화질 모두 원본을 복사한다.
+# 480p용으로 저음질 인코딩할 경우 스트림당 CPU 코어 약 0.125개 소모됐기 때문.
 # -hls_list_size 0 + event: 조각을 지우지 않는다(처음부터 되감기 가능, VOD 재료).
 # shellcheck disable=SC2086
 exec ffmpeg -hide_banner -loglevel warning $HW -i "$IN" \
   -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:a:0 \
   -c:v:0 copy -c:a:0 copy \
   $V1 -b:v:1 1M -maxrate:v:1 1200k -bufsize:v:1 2M -g:v:1 60 \
-  -c:a:1 aac -b:a:1 96k \
+  -c:a:1 copy \
   -f hls -hls_time 2 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments \
   -var_stream_map "v:0,a:0,name:src v:1,a:1,name:480p" \
   -master_pl_name master.m3u8 \
