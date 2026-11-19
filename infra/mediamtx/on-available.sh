@@ -1,7 +1,8 @@
 #!/bin/sh
 # 송출 시작: Spring 에 알려 출력 폴더(/media/hls/{eventId}/{sessionNo})를 받고, 원본 + 480p HLS 를 쓴다.
 # env: MTX_PATH(live/{key}), SPRING_URL, STREAM_INTERNAL_TOKEN, STREAM_ENCODER(vaapi|x264),
-#      STREAM_VAAPI_DEVICE(선택, 기본은 Intel 렌더 노드 자동 탐색)
+#      STREAM_VAAPI_DEVICE(선택, 기본은 Intel 렌더 노드 자동 탐색),
+#      STREAM_SRC_VIDEO_BITRATE(선택, 기본 10M. 원본 화질의 표시용 비트레이트)
 set -eu
 
 KEY="${MTX_PATH#live/}"
@@ -46,13 +47,17 @@ fi
 
 # 음성은 두 화질 모두 원본을 복사한다.
 # 480p용으로 저음질 인코딩할 경우 스트림당 CPU 코어 약 0.125개 소모됐기 때문.
-# -hls_list_size 0 + event: 조각을 지우지 않는다(처음부터 되감기 가능, VOD 재료).
+# 복사 스트림은 ffmpeg가 비트레이트를 몰라, master.m3u8 을 처음 쓸 때 `BANDWIDTH`를 구하지 못한 화질(원본)을
+# 목록에서 빼 버린다("Bandwidth info not available"). 그래서 복사 스트림에도 -b 로 표시용 값을 준다.
+# 재인코딩은 일어나지 않으며, 이 값은 hls.js 가 화질을 고르는 기준(BANDWIDTH)이 된다.
+# 영상은 OBS 송출 비트레이트에 맞춘다. 음성은 OBS 기본값(160k) 기준.
+# -hls_list_size 0 + event: 조각(.ts)을 지우지 않는다(처음부터 되감기 가능, 지우지 않은 조각들은 VOD 재료로 사용해야 함).
 # shellcheck disable=SC2086
 exec ffmpeg -hide_banner -loglevel warning $HW -i "$IN" \
   -map 0:v:0 -map 0:a:0 -map 0:v:0 -map 0:a:0 \
-  -c:v:0 copy -c:a:0 copy \
+  -c:v:0 copy -c:a:0 copy -b:v:0 "${STREAM_SRC_VIDEO_BITRATE:-10M}" -b:a:0 160k \
   $V1 -b:v:1 1M -maxrate:v:1 1200k -bufsize:v:1 2M -g:v:1 60 \
-  -c:a:1 copy \
+  -c:a:1 copy -b:a:1 160k \
   -f hls -hls_time 2 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments \
   -var_stream_map "v:0,a:0,name:src v:1,a:1,name:480p" \
   -master_pl_name master.m3u8 \

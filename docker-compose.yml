@@ -100,6 +100,8 @@ services:
       STREAM_ENCODER: ${STREAM_ENCODER:-vaapi}
       # 비우면 Intel 렌더 노드를 자동으로 찾는다(GPU 가 여러 개면 renderD128 이 Intel 이 아닐 수 있음)
       STREAM_VAAPI_DEVICE: ${STREAM_VAAPI_DEVICE:-}
+      # 원본 화질의 표시용 비트레이트(master.m3u8 BANDWIDTH). 호스트 OBS 비트레이트에 맞춘다.
+      STREAM_SRC_VIDEO_BITRATE: ${STREAM_SRC_VIDEO_BITRATE:-10M}
       LIBVA_DRIVER_NAME: iHD
     volumes:
       - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
