@@ -16,6 +16,7 @@ export interface StreamKey {
   streamKey: string;
   rtmpUrl: string;
   status: StreamStatus;
+  vodStatus: VodStatus;
 }
 
 // 응답과 함께 /media/ 전용 관람 쿠키가 구워진다(같은 오리진이라 자동 저장).

@@ -5,9 +5,11 @@ import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.stream.StreamProperties;
 import cloudsoswift.podoR.domain.stream.dto.StreamKeyResponse;
 import cloudsoswift.podoR.domain.stream.entity.StreamStatus;
+import cloudsoswift.podoR.domain.stream.entity.VodStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -68,5 +70,13 @@ class StreamKeyServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void 응답에_VOD_상태를_담는다() {
+        assertThat(service.getOrIssue("E1").vodStatus()).isEqualTo("NONE");
+
+        ReflectionTestUtils.setField(event, "vodStatus", VodStatus.READY);
+        assertThat(service.getOrIssue("E1").vodStatus()).isEqualTo("READY");
     }
 }

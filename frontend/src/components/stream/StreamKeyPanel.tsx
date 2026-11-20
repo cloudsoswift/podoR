@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
-import { endStream, getStreamKey, reissueStreamKey, StreamKey, StreamStatus } from "@/lib/api/stream";
+import { endStream, getStreamKey, reissueStreamKey, StreamKey, StreamStatus, VodStatus } from "@/lib/api/stream";
 
 const POLL_MS = 5000;
 
@@ -14,9 +14,24 @@ const STATUS_LABEL: Record<StreamStatus, string> = {
   ENDED: "종료",
 };
 
+const VOD_LABEL: Record<VodStatus, string> = {
+  NONE: "VOD 준비 전",
+  PROCESSING: "VOD 만드는 중",
+  READY: "VOD 준비됨",
+  FAILED: "VOD 만들기 실패 — 관리자에게 문의해 주세요",
+};
+
+/** 종료 후 VOD 가 준비됐거나 실패하면 더 바뀔 상태가 없다. */
+function isFinal(data: StreamKey | null) {
+  return data?.status === "ENDED" && (data.vodStatus === "READY" || data.vodStatus === "FAILED");
+}
+
 type Confirming = "reissue" | "end" | null;
 
-/** host 의 OBS 설정값(서버 주소·스트림 키)과 방송 상태·종료. 상태는 5초마다 다시 받는다. */
+/**
+ * host 의 OBS 설정값(서버 주소·스트림 키)과 방송 상태·종료. 상태는 5초마다 다시 받고,
+ * 종료 후 VOD 가 준비됨·실패가 되면 멈춘다.
+ */
 export default function StreamKeyPanel({ eventId }: { eventId: string }) {
   const [data, setData] = useState<StreamKey | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -33,12 +48,17 @@ export default function StreamKeyPanel({ eventId }: { eventId: string }) {
     }
   }, [eventId]);
 
+  const final = isFinal(data);
+
   useEffect(() => {
-    // 최초 로드와 상태 폴링
     load();
+  }, [load]);
+
+  useEffect(() => {
+    if (final) return;
     const id = setInterval(load, POLL_MS);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, final]);
 
   const copy = async () => {
     if (!data) return;
@@ -95,6 +115,7 @@ export default function StreamKeyPanel({ eventId }: { eventId: string }) {
             {STATUS_LABEL[data.status]}
           </span>
         </div>
+        {data.status === "ENDED" && <p className="text-sm text-gray-600">{VOD_LABEL[data.vodStatus]}</p>}
         {canEnd && (
           <button
             onClick={() => setConfirming("end")}
@@ -133,6 +154,7 @@ export default function StreamKeyPanel({ eventId }: { eventId: string }) {
         <ul className="list-disc pl-5 text-xs text-gray-500 space-y-1">
           <li>OBS 설정 → 방송 → 서비스 &quot;사용자 지정&quot;, 위 서버와 스트림 키를 입력합니다.</li>
           <li>출력 → 키프레임 간격은 2초로 맞춥니다.</li>
+          <li>출력 → 비트레이트는 10000 Kbps, 레이트 컨트롤은 CBR 로 맞춥니다.</li>
           <li>스트림 키는 다른 사람에게 보여 주지 마세요. 노출되면 재발급합니다.</li>
         </ul>
       </section>

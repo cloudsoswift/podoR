@@ -45,7 +45,8 @@ public class StreamKeyService {
     }
 
     private StreamKeyResponse toResponse(Event event) {
-        return new StreamKeyResponse(event.getStreamKey(), props.rtmpUrl(), event.effectiveStreamStatus().name());
+        return new StreamKeyResponse(event.getStreamKey(), props.rtmpUrl(), event.effectiveStreamStatus().name(),
+                event.getVodStatus().name());
     }
 
     private Event findEvent(String eventId) {
