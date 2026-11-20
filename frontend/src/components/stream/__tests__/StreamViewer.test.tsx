@@ -4,6 +4,7 @@ import { server } from "@/mocks/server";
 import { BASE_URL } from "@/mocks/handlers";
 import { StreamView } from "@/lib/api/stream";
 import StreamViewer from "../StreamViewer";
+import { nextPollDelay } from "../useStreamView";
 
 // hls.js 는 MediaSource 가 필요해 jsdom 에서 돌지 않는다. 인스턴스 호출만 기록한다.
 type Inst = {
@@ -11,7 +12,9 @@ type Inst = {
   attachMedia: jest.Mock;
   destroy: jest.Mock;
   on: jest.Mock;
-  handlers: Record<string, (event: string, data: { fatal: boolean }) => void>;
+  startLevel?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handlers: Record<string, (event: string, data: any) => void>;
 };
 const instances: Inst[] = [];
 jest.mock("hls.js", () => {
@@ -29,7 +32,7 @@ jest.mock("hls.js", () => {
     instances.push(inst);
     return inst;
   });
-  Object.assign(Hls, { isSupported: () => true, Events: { ERROR: "hlsError" } });
+  Object.assign(Hls, { isSupported: () => true, Events: { ERROR: "hlsError", MANIFEST_PARSED: "hlsManifestParsed" } });
   return { __esModule: true, default: Hls };
 });
 
@@ -162,4 +165,124 @@ test("FAILED_면_실패_안내", async () => {
   stub([view({ status: "ENDED", vodStatus: "FAILED" })]);
   await renderViewer();
   expect(await screen.findByText("VOD 를 준비하지 못했습니다.")).toBeInTheDocument();
+});
+
+test.each<[StreamView | null, number | null]>([
+  [null, 5000],
+  [view({ status: "LIVE" }), 5000],
+  [view({ status: "INTERRUPTED" }), 2000],
+  [view({ status: "ENDED", vodStatus: "PROCESSING" }), 5000],
+  [view({ status: "ENDED", vodStatus: "READY" }), 60000],
+  [view({ status: "ENDED", vodStatus: "FAILED" }), null],
+])("nextPollDelay_%#", (v, expected) => {
+  expect(nextPollDelay(v)).toBe(expected);
+});
+
+/** 응답(or 상태 코드)을 돌려주며 GET 호출 수를 센다. */
+function countingStub(respond: () => Response) {
+  const counter = { calls: 0 };
+  server.use(
+    http.get(`${BASE_URL}/events/E1/stream`, () => {
+      counter.calls++;
+      return respond();
+    }),
+  );
+  return counter;
+}
+
+async function withFakeTimers(fn: () => Promise<void>) {
+  jest.useFakeTimers({ doNotFake: ["queueMicrotask", "nextTick"] });
+  try {
+    await fn();
+  } finally {
+    jest.useRealTimers();
+  }
+}
+
+async function advance(ms: number) {
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(ms);
+  });
+}
+
+test("INTERRUPTED_면_2초_뒤_다시_부른다", async () => {
+  const c = countingStub(() => HttpResponse.json(view({ status: "INTERRUPTED" })));
+  await withFakeTimers(async () => {
+    await renderViewer();
+    await advance(100);
+    expect(c.calls).toBe(1);
+    await advance(2000);
+    expect(c.calls).toBe(2);
+  });
+});
+
+test("VOD_FAILED_면_더_부르지_않는다", async () => {
+  const c = countingStub(() => HttpResponse.json(view({ status: "ENDED", vodStatus: "FAILED" })));
+  await withFakeTimers(async () => {
+    await renderViewer();
+    await advance(120000);
+    expect(c.calls).toBe(1);
+  });
+});
+
+test("VOD_READY_면_60초마다_부른다", async () => {
+  const c = countingStub(() =>
+    HttpResponse.json(view({ status: "ENDED", vodStatus: "READY", vodUrl: "/media/vod/E1.mp4" })),
+  );
+  await withFakeTimers(async () => {
+    await renderViewer();
+    await advance(59000);
+    expect(c.calls).toBe(1);
+    await advance(1100);
+    expect(c.calls).toBe(2);
+  });
+});
+
+test("5xx_면_5초_뒤_재시도", async () => {
+  const c = countingStub(() => new HttpResponse(null, { status: 500 }));
+  await withFakeTimers(async () => {
+    await renderViewer();
+    await advance(100);
+    expect(c.calls).toBe(1);
+    await advance(5000);
+    expect(c.calls).toBe(2);
+  });
+});
+
+test("언마운트_후에는_부르지_않는다", async () => {
+  const c = countingStub(() => HttpResponse.json(view({ status: "LIVE" })));
+  await withFakeTimers(async () => {
+    let unmount = () => {};
+    await act(async () => {
+      ({ unmount } = render(<StreamViewer eventId="E1" />));
+    });
+    await advance(100);
+    unmount();
+    await advance(10000);
+    expect(c.calls).toBe(1);
+  });
+});
+
+async function parsedManifest(levels: { bitrate: number }[]) {
+  stub([view({ status: "LIVE", liveUrl: "/media/hls/E1/1/master.m3u8" })]);
+  await renderViewer();
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  act(() => instances[0].handlers["hlsManifestParsed"]("hlsManifestParsed", { levels }));
+}
+
+test("매니페스트를_읽으면_가장_높은_화질에서_시작한다", async () => {
+  await parsedManifest([{ bitrate: 1_000_000 }, { bitrate: 10_000_000 }]);
+  expect(instances[0].startLevel).toBe(1);
+});
+
+test("화질_순서와_무관하게_비트레이트_최대를_고른다", async () => {
+  await parsedManifest([{ bitrate: 10_000_000 }, { bitrate: 1_000_000 }]);
+  expect(instances[0].startLevel).toBe(0);
+});
+
+test("화질이_하나면_0", async () => {
+  await parsedManifest([{ bitrate: 1_000_000 }]);
+  expect(instances[0].startLevel).toBe(0);
 });

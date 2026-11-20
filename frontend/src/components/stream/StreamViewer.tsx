@@ -13,8 +13,14 @@ function Notice({ children }: { children: string }) {
 
 const RETRY_MS = 2000;
 
+/** 비트레이트가 가장 높은 화질의 인덱스. hls.js 의 정렬 순서에 기대지 않는다. */
+function highestBitrateLevel(levels: { bitrate: number }[]): number {
+  return levels.reduce((best, level, i) => (level.bitrate > levels[best].bitrate ? i : best), 0);
+}
+
 /**
  * 라이브 재생. hls.js 가 되면 hls.js 로(화질 자동 전환), 아니면 Safari 의 네이티브 HLS 로.
+ * hls.js 는 원본(src, 비트레이트 최대) 화질에서 시작하고, 이후 회선에 맞춰 자동으로 내린다.
  * 세션이 바뀌면(OBS 재접속) liveUrl 이 바뀌므로 이전 인스턴스를 정리하고 새 주소로 다시 붙는다.
  * 송출 직후에는 ffmpeg 가 아직 master.m3u8 을 쓰기 전이라 404 가 나는데, hls.js 는 4xx 를 다시
  * 시도하지 않으므로 치명적 오류가 나면 잠시 뒤 인스턴스를 새로 만든다.
@@ -34,6 +40,9 @@ function LivePlayer({ url }: { url: string }) {
       if (destroyed) return;
       if (Hls.isSupported()) {
         const instance = new Hls();
+        instance.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+          instance.startLevel = highestBitrateLevel(data.levels);
+        });
         instance.on(Hls.Events.ERROR, (_event, data) => {
           if (!data.fatal || destroyed) return;
           instance.destroy();
