@@ -126,7 +126,9 @@ services:
     networks: [app-net]
 
   nginx:
-    image: nginx:1.27
+    # upstream 의 `server … resolve` 는 오픈소스 nginx 1.27.3 부터 지원된다.
+    # `nginx:1.27` 처럼 마이너 태그만 쓰면 서버에 예전에 받아 둔 1.27.0~2 가 남아 있을 수 있어 고정한다.
+    image: nginx:1.27.5
     container_name: home-nginx
     restart: unless-stopped
     ports:
