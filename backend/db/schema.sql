@@ -48,7 +48,7 @@ CREATE TABLE users (
 );
 COMMENT ON COLUMN users.provider    IS 'GOOGLE, KAKAO';
 COMMENT ON COLUMN users.provider_id IS 'OAuth 제공자 고유 ID';
-COMMENT ON COLUMN users.role        IS 'USER, ADMIN';
+COMMENT ON COLUMN users.role        IS 'USER, HOST, ADMIN';
 
 CREATE TRIGGER update_user_updated_at
     BEFORE UPDATE ON users
@@ -120,6 +120,7 @@ CREATE TABLE event (
     ticketing_date timestamp    NOT NULL,
     stream_key     varchar(255),
     stream_status  varchar(20),
+    vod_status     varchar(20)  NOT NULL DEFAULT 'NONE',
     venue_seq      bigint       NOT NULL,
     CONSTRAINT "PK_EVENT" PRIMARY KEY (seq),
     CONSTRAINT uk_event_event_id UNIQUE (event_id),
@@ -128,7 +129,8 @@ CREATE TABLE event (
 );
 COMMENT ON COLUMN event.event_id      IS 'UUID 형태의 이벤트 식별자';
 COMMENT ON COLUMN event.series_id     IS '같은 공연의 여러 회차를 묶는 그룹키';
-COMMENT ON COLUMN event.stream_status IS 'SCHEDULED, LIVE, ENDED';
+COMMENT ON COLUMN event.stream_status IS 'SCHEDULED, LIVE, INTERRUPTED, ENDED';
+COMMENT ON COLUMN event.vod_status    IS 'NONE, PROCESSING, READY, FAILED';
 
 -- ---------------------------------------------------------------------
 -- event_series (공연 시리즈 단위 설정 — 1인 최대 예매 좌석수)
@@ -240,3 +242,20 @@ CREATE TABLE payment (
     CONSTRAINT "FK_ticketing_order_TO_payment_1" FOREIGN KEY (ticketing_order_seq) REFERENCES ticketing_order(seq)
 );
 COMMENT ON COLUMN payment.payment_status IS 'COMPLETED, CANCELLED';
+
+-- ---------------------------------------------------------------------
+-- stream_session (송출 한 번 = 한 행. OBS 재접속마다 새 행)
+--   session_no 는 회차 안에서 1부터 증가하며 HLS 폴더 이름(/hls/{eventId}/{session_no}/)과
+--   VOD 이어 붙이기 순서로 쓴다. 현재 세션 = 그 회차에서 session_no 가 가장 큰 행.
+-- ---------------------------------------------------------------------
+CREATE TABLE stream_session (
+    seq        bigserial NOT NULL,
+    event_seq  bigint    NOT NULL,
+    session_no integer   NOT NULL,
+    started_at timestamp NOT NULL,
+    ended_at   timestamp,
+    CONSTRAINT "PK_STREAM_SESSION" PRIMARY KEY (seq),
+    CONSTRAINT uk_stream_session_event_no UNIQUE (event_seq, session_no),
+    CONSTRAINT "FK_event_TO_stream_session_1" FOREIGN KEY (event_seq) REFERENCES event(seq)
+);
+COMMENT ON COLUMN stream_session.ended_at IS '송출이 끊긴 시각. 송출 중이면 NULL';

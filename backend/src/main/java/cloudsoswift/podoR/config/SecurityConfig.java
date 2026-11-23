@@ -46,6 +46,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/error", "/favicon.ico").permitAll()
                         .requestMatchers("/oauth2/**").permitAll()
+                        // MediaMTX·nginx 내부 호출. 외부는 nginx 가 막고, 공유 비밀/쿠키 서명으로 판정한다.
+                        .requestMatchers("/internal/**").permitAll()
                         // 소비자 조회(GET)만 공개 — 쓰기/관리자/`/users/**` 는 보호 유지
                         // 좌석맵(seat-view)은 대기열 도입으로 로그인 필요로 전환되어 여기서 제외했다.
                         // 이벤트 목록·상세는 공개로 남긴다 — 비로그인도 공연 정보는 볼 수 있어야 한다.

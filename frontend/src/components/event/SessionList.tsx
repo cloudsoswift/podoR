@@ -14,8 +14,15 @@ import { useAuthStore } from "@/store/authStore";
  * - 1초 틱은 목록 전체에서 useNow 하나로 돌린다(행마다 인터벌을 만들지 않는다).
  * - 표시는 클라이언트 시계, 판정은 서버다. 시계가 빨라 일찍 들어가면 게이트가 NOT_OPEN 을 받고 재시도로 맞춘다.
  * - 좌석을 보는 것 자체가 대기열 진입이므로 라벨은 "예매하기". 비로그인이면 로그인 후 좌석으로 돌아오게 한다.
+ * - watchableIds(내가 예매한 회차)에는 "관람하기" 링크를 함께 둔다.
  */
-export default function SessionList({ sessions }: { sessions: EventItem[] }) {
+export default function SessionList({
+  sessions,
+  watchableIds,
+}: {
+  sessions: EventItem[];
+  watchableIds?: Set<string>;
+}) {
   const now = useNow();
   const loggedIn = useAuthStore((s) => Boolean(s.accessToken));
 
@@ -30,6 +37,12 @@ export default function SessionList({ sessions }: { sessions: EventItem[] }) {
         const seatsPath = `/events/${s.eventId}/seats`;
         const date = <span className="text-sm font-medium text-gray-800">{formatDateTime(s.eventDate)}</span>;
 
+        const watch = watchableIds?.has(s.eventId) && (
+          <Link href={`/events/${s.eventId}/stream`} className="text-sm font-medium text-emerald-600 hover:underline">
+            관람하기
+          </Link>
+        );
+
         if (untilOpen > 0) {
           return (
             <div
@@ -38,20 +51,27 @@ export default function SessionList({ sessions }: { sessions: EventItem[] }) {
               className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
             >
               {date}
-              <span className="text-sm text-gray-400">예매 오픈까지 {formatCountdown(untilOpen)}</span>
+              <span className="flex items-center gap-4">
+                {watch}
+                <span className="text-sm text-gray-400">예매 오픈까지 {formatCountdown(untilOpen)}</span>
+              </span>
             </div>
           );
         }
 
         return (
-          <Link
+          <div
             key={s.eventId}
-            href={loggedIn ? seatsPath : loginHref(seatsPath)}
             className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-indigo-300"
           >
             {date}
-            <span className="text-sm text-indigo-600">예매하기 →</span>
-          </Link>
+            <span className="flex items-center gap-4">
+              {watch}
+              <Link href={loggedIn ? seatsPath : loginHref(seatsPath)} className="text-sm text-indigo-600">
+                예매하기 →
+              </Link>
+            </span>
+          </div>
         );
       })}
     </div>

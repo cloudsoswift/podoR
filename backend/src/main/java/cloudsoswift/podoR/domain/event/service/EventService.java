@@ -9,6 +9,7 @@ import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.event.entity.EventSeries;
 import cloudsoswift.podoR.domain.event.repository.EventRepository;
 import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
+import cloudsoswift.podoR.domain.stream.entity.StreamStatus;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.user.service.UserService;
 import cloudsoswift.podoR.domain.venue.entity.Venue;
@@ -72,7 +73,7 @@ public class EventService {
                 .eventType(request.getEventType())
                 .eventDate(request.getEventDate())
                 .ticketingDate(request.getTicketingDate())
-                .streamStatus("SCHEDULED")
+                .streamStatus(StreamStatus.SCHEDULED)
                 .venue(venue)
                 .build();
         Event saved = eventRepository.save(event);

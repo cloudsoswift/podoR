@@ -46,7 +46,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Comment("USER, ADMIN")
+    @Comment("USER, HOST, ADMIN")
     private Role role = Role.USER;
 
     @Column(length = 50)
@@ -102,6 +102,11 @@ public class User {
         this.phone = phone;
         this.birthday = birthday;
         this.profileImage = profileImage;
+    }
+
+    // 관리자 화면에서 역할 변경. 액세스 토큰의 role 클레임은 다음 재발급부터 반영된다.
+    public void changeRole(Role role) {
+        this.role = role;
     }
 
     // 갱신 가능한 요소들에 대해서 갱신 수행하는 메서드

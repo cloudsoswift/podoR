@@ -4,8 +4,62 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
-import { AdminUserDetail, deleteUser, getUser } from "@/lib/api/adminUsers";
+import axios from "axios";
+import { AdminUserDetail, changeUserRole, deleteUser, getUser, UserRole } from "@/lib/api/adminUsers";
 import { formatDate, formatDateTime } from "@/lib/format";
+
+const ROLES: UserRole[] = ["USER", "HOST", "ADMIN"];
+
+/** 역할은 액세스 토큰 클레임이라 그 사용자가 다음에 토큰을 갱신할 때 적용된다. */
+function RoleEditor({ seq, current }: { seq: number; current: string }) {
+  const [role, setRole] = useState<UserRole>(current as UserRole);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await changeUserRole(seq, role);
+      setMessage("변경했습니다. 해당 사용자가 다음에 토큰을 갱신하면(최대 15분) 적용됩니다.");
+    } catch (e) {
+      setMessage(
+        axios.isAxiosError(e) && e.response?.status === 400
+          ? "자기 자신의 관리자 권한은 해제할 수 없습니다."
+          : "권한 변경에 실패했습니다.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <select
+          aria-label="권한"
+          value={role}
+          onChange={(e) => setRole(e.target.value as UserRole)}
+          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={save}
+          disabled={saving || role === current}
+          className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-40 cursor-pointer"
+        >
+          변경
+        </button>
+      </div>
+      {message && <p className="text-xs text-gray-500">{message}</p>}
+    </div>
+  );
+}
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -81,7 +135,7 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ seq:
         <Row label="ID" value={user.seq} />
         <Row label="이메일" value={user.email} />
         <Row label="닉네임" value={user.nickname} />
-        <Row label="권한" value={user.role} />
+        <Row label="권한" value={<RoleEditor seq={user.seq} current={user.role} />} />
         <Row label="가입경로" value={user.provider} />
         <Row label="전화번호" value={user.phone} />
         <Row label="생년월일" value={formatDate(user.birthday)} />
