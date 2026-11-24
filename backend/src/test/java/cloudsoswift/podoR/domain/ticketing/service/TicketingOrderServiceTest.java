@@ -11,6 +11,10 @@ import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
 import cloudsoswift.podoR.domain.queue.WaitingQueueService;
 import cloudsoswift.podoR.domain.seat.entity.Seat;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationNotAllowedException;
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
+import cloudsoswift.podoR.domain.ticketing.cancel.DefaultRefundPolicy;
+import cloudsoswift.podoR.domain.ticketing.cancel.RefundProperties;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
@@ -24,10 +28,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -50,6 +57,8 @@ class TicketingOrderServiceTest {
     @Mock SeatVersionGenerator seatVersionGenerator;
     @Mock SeatViewSnapshotCache snapshotCache;
     @Mock WaitingQueueService waitingQueue;
+    @Spy CancellationService cancellationService = new CancellationService(
+            new DefaultRefundPolicy(new RefundProperties(Duration.ofMinutes(30))));
 
     @InjectMocks TicketingOrderService service;
 
@@ -62,6 +71,7 @@ class TicketingOrderServiceTest {
         lenient().when(e.getSeq()).thenReturn(1L);
         lenient().when(e.getSeriesId()).thenReturn(SERIES);
         lenient().when(e.getEventId()).thenReturn(EVENT_ID);
+        lenient().when(e.getEventDate()).thenReturn(LocalDateTime.now().plusDays(7));
         return e;
     }
 
@@ -267,7 +277,7 @@ class TicketingOrderServiceTest {
         EventSeat s2 = mockSeat(2L, event, SeatStatus.SOLD, 20000);
         TicketingOrder order = paidOrder(event, paidItem(11L, s1, 10000), paidItem(12L, s2, 20000));
         Payment payment = Payment.builder().ticketingOrder(order).amount(30000L).method("MOCK").build();
-        when(paymentRepository.findByTicketingOrder_Seq(any())).thenReturn(Optional.of(payment));
+        ReflectionTestUtils.setField(order, "payment", payment);
         when(seatVersionGenerator.next(1L)).thenReturn(7L);
 
         service.cancelItems(USER, "O1", List.of(12L));
@@ -321,5 +331,28 @@ class TicketingOrderServiceTest {
 
         verify(eventSeatRepository).updateStatusIfCurrent(List.of(1L), 1L, SeatStatus.SOLD, SeatStatus.AVAILABLE, 7L);
         assertThat(order.getStatus()).isEqualTo("CANCELLED");
+    }
+    @Test
+    void 마감_후_취소는_거절하고_아무것도_바꾸지_않는다() {
+        Event event = mockEvent();
+        when(event.getEventDate()).thenReturn(LocalDateTime.now().plusMinutes(10));
+        TicketingOrder order = paidOrder(event, paidItem(11L, mockSeat(1L, event, SeatStatus.SOLD, 10000), 10000));
+
+        assertThatThrownBy(() -> service.cancelItems(USER, "O1", List.of(11L)))
+                .isInstanceOf(CancellationNotAllowedException.class);
+
+        assertThat(order.getStatus()).isEqualTo("PAID");
+        verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
+        verify(snapshotCache, never()).evict(anyString());
+    }
+    @Test
+    void getMyOrder_취소_마감을_담는다() {
+        Event event = mockEvent();
+        LocalDateTime show = LocalDateTime.of(2026, 12, 1, 19, 0);
+        when(event.getEventDate()).thenReturn(show);
+        when(event.getVenue()).thenReturn(cloudsoswift.podoR.domain.venue.entity.Venue.builder().name("v").address("a").build());
+        paidOrder(event, paidItem(11L, mockSeat(1L, event, SeatStatus.SOLD, 10000), 10000));
+
+        assertThat(service.getMyOrder(USER, "O1").getCancellableUntil()).isEqualTo(show.minusMinutes(30));
     }
 }

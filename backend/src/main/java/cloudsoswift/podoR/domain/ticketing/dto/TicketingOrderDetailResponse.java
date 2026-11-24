@@ -15,18 +15,21 @@ public class TicketingOrderDetailResponse {
     private final LocalDateTime orderedAt;
     private final String status;
     private final LocalDateTime cancelledAt;
+    // 관객 취소 마감 시각(환불 정책). 이 시각부터는 관객이 취소할 수 없다.
+    private final LocalDateTime cancellableUntil;
     private final Integer totalPrice;
     private final String eventTitle;
     private final String venueName;
     private final LocalDateTime eventDate;
     private final List<Seat> seats;
 
-    public TicketingOrderDetailResponse(TicketingOrder o) {
+    public TicketingOrderDetailResponse(TicketingOrder o, LocalDateTime cancellableUntil) {
         this.eventId = o.getEvent().getEventId();
         this.orderNumber = o.getOrderNumber();
         this.orderedAt = o.getOrderedAt();
         this.status = o.getStatus();
         this.cancelledAt = o.getCancelledAt();
+        this.cancellableUntil = cancellableUntil;
         this.totalPrice = o.getTotalPrice();
         this.eventTitle = o.getEvent().getTitle();
         this.venueName = o.getEvent().getVenue().getName();
@@ -45,6 +48,7 @@ public class TicketingOrderDetailResponse {
         private final Integer price;
         private final String status;          // PAID / CANCELLED
         private final LocalDateTime cancelledAt;
+        private final String cancelReason;    // USER / VENUE_CHANGE, 사유 기록 전 취소는 null
 
         public Seat(TicketingItem item) {
             this.itemSeq = item.getSeq();
@@ -55,6 +59,7 @@ public class TicketingOrderDetailResponse {
             this.price = item.getPrice();
             this.status = item.getStatus();
             this.cancelledAt = item.getCancelledAt();
+            this.cancelReason = item.getCancelReason() == null ? null : item.getCancelReason().name();
         }
     }
 }

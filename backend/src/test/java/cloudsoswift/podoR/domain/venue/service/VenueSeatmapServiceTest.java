@@ -6,6 +6,10 @@ import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.seat.entity.Seat;
 import cloudsoswift.podoR.domain.seat.repository.SeatRepository;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
+import cloudsoswift.podoR.domain.ticketing.cancel.DefaultRefundPolicy;
+import cloudsoswift.podoR.domain.ticketing.cancel.RefundProperties;
+import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
@@ -21,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -37,7 +42,8 @@ import static org.mockito.Mockito.verify;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(VenueSeatmapService.class)
+@Import({VenueSeatmapService.class, CancellationService.class, DefaultRefundPolicy.class})
+@EnableConfigurationProperties(RefundProperties.class)
 class VenueSeatmapServiceTest {
 
     @Autowired TestEntityManager em;
@@ -214,6 +220,22 @@ class VenueSeatmapServiceTest {
         assertThat(seatAt("A", 1).getIsAvailable()).isTrue();
         assertThat(reload(order).getStatus()).isEqualTo("PAID");
         assertThat(eventSeatCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 공연_임박_회차도_배치변경_취소() {
+        save(seat("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
+        Event e = eventAt("E1", LocalDateTime.now().plusMinutes(10));
+        TicketingOrder order = book(e, "O1", seatAt("A", 1));
+
+        save(1, off("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
+
+        TicketingOrder after = reload(order);
+        assertThat(after.getStatus()).isEqualTo("CANCELLED");
+        TicketingItem item = after.getItems().get(0);
+        assertThat(item.getCancelReason()).isEqualTo(CancelReason.VENUE_CHANGE);
+        assertThat(item.getRefundAmount()).isEqualTo(10000);
+        assertThat(after.getPayment().getStatus()).isEqualTo("CANCELLED");
     }
 
     @Test

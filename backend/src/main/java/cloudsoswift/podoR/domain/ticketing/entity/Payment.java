@@ -52,10 +52,13 @@ public class Payment {
         this.paidAt = LocalDateTime.now();
     }
 
-    /** 취소(환불) 금액을 누적한다. 원금까지 취소되면 CANCELLED, 아니면 PARTIALLY_CANCELLED. */
-    public void cancelAmount(long cancelled, LocalDateTime at) {
-        this.cancelledAmount += cancelled;
-        if (this.cancelledAmount >= this.amount) {
+    /**
+     * 환불 금액을 누적한다. 주문에 남은 좌석이 없으면(fullyCancelled) CANCELLED, 아니면 PARTIALLY_CANCELLED.
+     * 수수료·할인이 있으면 누적 환불액이 원금과 다르므로 금액으로 판정하지 않는다.
+     */
+    public void cancelAmount(long refunded, LocalDateTime at, boolean fullyCancelled) {
+        this.cancelledAmount += refunded;
+        if (fullyCancelled) {
             this.status = "CANCELLED";
             this.cancelledAt = at;
         } else {

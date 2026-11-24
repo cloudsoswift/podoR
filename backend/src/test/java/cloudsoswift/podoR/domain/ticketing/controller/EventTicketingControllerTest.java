@@ -153,4 +153,17 @@ class EventTicketingControllerTest {
                         .content("{\"ticketingItemSeqs\":[11]}"))
                 .andExpect(status().isConflict());
     }
+
+    @Test
+    void 취소_마감이면_400과_사유() throws Exception {
+        doThrow(new cloudsoswift.podoR.domain.ticketing.cancel.CancellationNotAllowedException(
+                "공연 시작 30분 전부터는 취소할 수 없습니다."))
+                .when(service).cancelItems(anyLong(), anyString(), anyList());
+
+        mvc.perform(post("/events/EVT1/order/O1/cancel").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketingItemSeqs\":[11]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("공연 시작 30분 전부터는 취소할 수 없습니다."));
+    }
 }

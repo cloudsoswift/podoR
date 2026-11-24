@@ -96,10 +96,10 @@ class TicketingOrderConcurrencyTest {
         TicketingOrder o2 = em2.find(TicketingOrder.class, orderSeq);
         LocalDateTime now = LocalDateTime.now();
 
-        o1.cancelItems(List.of(em1.find(TicketingItem.class, itemA)), now);
+        o1.cancelItems(List.of(em1.find(TicketingItem.class, itemA)), CancelReason.USER, TicketingItem::getPrice, now);
         em1.getTransaction().commit();
 
-        o2.cancelItems(List.of(em2.find(TicketingItem.class, itemB)), now);
+        o2.cancelItems(List.of(em2.find(TicketingItem.class, itemB)), CancelReason.USER, TicketingItem::getPrice, now);
         assertThatThrownBy(() -> em2.getTransaction().commit())
                 .isInstanceOf(RollbackException.class)
                 .hasCauseInstanceOf(OptimisticLockException.class);

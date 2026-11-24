@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.ToIntFunction;
 
 @Entity
 @Table(name = "ticketing_order")
@@ -96,12 +97,14 @@ public class TicketingOrder {
 
     /**
      * 항목 단위 부분 취소. 총액은 남은 항목 금액 합으로, 상태는 남은 항목 유무로 맞춘다.
+     * 항목마다 사유와 환불액(refundOf, 환불 정책이 정함)을 남긴다.
      * 이 주문의 활성 항목이 아닌 것이 섞이면 아무것도 바꾸지 않고 400.
-     * 회차 좌석 상태 복구와 결제 취소액 반영은 호출부 책임이다.
+     * 회차 좌석 상태 복구와 결제 환불액 반영은 호출부 책임이다.
      *
-     * @return 이번에 취소한 금액 합
+     * @return 이번에 환불할 금액 합
      */
-    public int cancelItems(Collection<TicketingItem> targets, LocalDateTime at) {
+    public int cancelItems(Collection<TicketingItem> targets, CancelReason reason,
+                           ToIntFunction<TicketingItem> refundOf, LocalDateTime at) {
         if (!isCancellable()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문입니다.");
         }
@@ -110,10 +113,11 @@ public class TicketingOrder {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "취소할 수 없는 좌석이 포함되어 있습니다.");
             }
         }
-        int cancelled = 0;
+        int refunded = 0;
         for (TicketingItem t : new LinkedHashSet<>(targets)) {
-            t.markCancelled(at);
-            cancelled += t.getPrice();
+            int refund = refundOf.applyAsInt(t);
+            t.markCancelled(at, reason, refund);
+            refunded += refund;
         }
         List<TicketingItem> remaining = activeItems();
         this.totalPrice = remaining.stream().mapToInt(TicketingItem::getPrice).sum();
@@ -123,7 +127,7 @@ public class TicketingOrder {
         } else {
             this.status = STATUS_PARTIALLY_CANCELLED;
         }
-        return cancelled;
+        return refunded;
     }
 
     // 현재 주문에 새 아이템 추가

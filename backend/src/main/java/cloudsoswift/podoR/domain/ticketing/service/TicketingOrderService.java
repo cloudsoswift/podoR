@@ -14,6 +14,8 @@ import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderDetailResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderSummaryResponse;
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
+import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
@@ -58,6 +60,7 @@ public class TicketingOrderService {
     private final SeatVersionGenerator seatVersionGenerator;
     private final SeatViewSnapshotCache snapshotCache;
     private final WaitingQueueService waitingQueue;
+    private final CancellationService cancellationService;
 
     private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
 
@@ -76,7 +79,7 @@ public class TicketingOrderService {
         TicketingOrder order = ticketingOrderRepository.findDetailByOrderNumber(orderNumber)
                 .filter(o -> o.getUser().getSeq().equals(userSeq))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
-        return new TicketingOrderDetailResponse(order);
+        return new TicketingOrderDetailResponse(order, cancellationService.userCancelDeadline(order));
     }
 
     /** "결제하기": 선택 좌석을 일괄 선점. 충돌/한도초과 시 409. */
@@ -209,23 +212,20 @@ public class TicketingOrderService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
 
+    /** 관객 취소: 취소(정책·결제는 CancellationService) 후 회차 좌석을 되돌리고 좌석맵 캐시를 비운다. */
     private void cancel(TicketingOrder order, List<TicketingItem> targets) {
-        if (!order.isCancellable()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "취소할 수 없는 주문입니다.");
-        }
+        LocalDateTime now = LocalDateTime.now();
+        cancellationService.cancel(order, targets, CancelReason.USER, now);
         // 공연장 배치 변경으로 회차 좌석이 지워진 항목은 되돌릴 좌석이 없다.
         List<Long> seatSeqs = targets.stream()
                 .filter(i -> i.getEventSeat() != null)
                 .map(i -> i.getEventSeat().getSeq())
                 .toList();
-        LocalDateTime now = LocalDateTime.now();
-        int cancelled = order.cancelItems(targets, now);
         if (!seatSeqs.isEmpty()) {
             long version = seatVersionGenerator.next(order.getEvent().getSeq());
             eventSeatRepository.updateStatusIfCurrent(seatSeqs, order.getEvent().getSeq(),
                     SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
         }
-        paymentRepository.findByTicketingOrder_Seq(order.getSeq()).ifPresent(p -> p.cancelAmount(cancelled, now));
         snapshotCache.evict(order.getEvent().getEventId());
     }
 

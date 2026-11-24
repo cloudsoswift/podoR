@@ -214,6 +214,8 @@ CREATE TABLE ticketing_item (
     price               integer     NOT NULL,
     status              varchar(20) NOT NULL DEFAULT 'PAID',
     cancelled_at        timestamp,
+    cancel_reason       varchar(20),
+    refund_amount       integer,
     CONSTRAINT "PK_TICKETING_ITEM" PRIMARY KEY (seq),
     CONSTRAINT "FK_ticketing_order_TO_ticketing_item_1" FOREIGN KEY (ticketing_order_seq) REFERENCES ticketing_order(seq),
     CONSTRAINT "FK_event_seat_TO_ticketing_item_1"      FOREIGN KEY (event_seat_seq)      REFERENCES event_seat(seq)
