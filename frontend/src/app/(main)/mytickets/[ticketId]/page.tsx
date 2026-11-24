@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import axios from "axios";
 import { useRouter } from "next/navigation";
 import { TicketDetail, TicketSeat, getMyTicket } from "@/lib/api/mytickets";
 import { cancelOrder, cancelOrderItems } from "@/lib/api/ticketing";
@@ -13,6 +14,16 @@ const STATUS_LABEL: Record<string, string> = {
   PARTIALLY_CANCELLED: "부분 취소",
   CANCELLED: "취소 완료",
 };
+
+const CANCEL_REASON_LABEL: Record<string, string> = {
+  USER: "관객 취소",
+  VENUE_CHANGE: "공연장 사정으로 취소",
+};
+
+/** 서버가 ProblemDetail 로 준 취소 거절 사유. 없으면 fallback. */
+function cancelErrorMessage(e: unknown, fallback: string) {
+  return (axios.isAxiosError(e) && e.response?.data?.detail) || fallback;
+}
 
 const seatLabel = (s: TicketSeat) => `${s.section} ${s.rowNumber}열 ${s.seatNumber ?? ""}번`;
 
@@ -44,8 +55,8 @@ export default function MyTicketDetailPage({
     try {
       await cancelOrder(ticket.eventId, ticket.orderNumber);
       router.replace("/mypage");
-    } catch {
-      alert("예매 취소에 실패했습니다.");
+    } catch (e) {
+      alert(cancelErrorMessage(e, "예매 취소에 실패했습니다."));
     }
   }
 
@@ -56,8 +67,8 @@ export default function MyTicketDetailPage({
       await cancelOrderItems(ticket.eventId, ticket.orderNumber, [...selected]);
       setConfirmOpen(false);
       await load();
-    } catch {
-      alert("좌석 취소에 실패했습니다.");
+    } catch (e) {
+      alert(cancelErrorMessage(e, "좌석 취소에 실패했습니다."));
     } finally {
       setCancelling(false);
     }
@@ -89,7 +100,9 @@ export default function MyTicketDetailPage({
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!ticket) return <p className="text-sm text-gray-500">불러오는 중…</p>;
 
-  const cancellable = ticket.status === "PAID" || ticket.status === "PARTIALLY_CANCELLED";
+  const hasActiveSeats = ticket.status === "PAID" || ticket.status === "PARTIALLY_CANCELLED";
+  const pastDeadline = Date.now() >= Date.parse(ticket.cancellableUntil);
+  const cancellable = hasActiveSeats && !pastDeadline;
   const selectedSeats = ticket.seats.filter((s) => selected.has(s.itemSeq));
   const refund = selectedSeats.reduce((sum, s) => sum + s.price, 0);
 
@@ -147,13 +160,19 @@ export default function MyTicketDetailPage({
                 <span className="text-gray-500">
                   {active
                     ? `${s.grade} · ${s.price.toLocaleString()}원`
-                    : `취소됨 · ${formatDateTime(s.cancelledAt)}`}
+                    : `${(s.cancelReason && CANCEL_REASON_LABEL[s.cancelReason]) ?? "취소됨"} · ${formatDateTime(s.cancelledAt)}`}
                 </span>
               </li>
             );
           })}
         </ul>
       </div>
+
+      {hasActiveSeats && pastDeadline && (
+        <p className="text-sm text-gray-500">
+          취소 마감({formatDateTime(ticket.cancellableUntil)})이 지나 취소할 수 없습니다.
+        </p>
+      )}
 
       {cancellable && (
         <div className="space-y-2">

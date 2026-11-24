@@ -23,6 +23,7 @@ export interface TicketSeat {
   price: number;
   status: "PAID" | "CANCELLED";
   cancelledAt: string | null;
+  cancelReason: "USER" | "VENUE_CHANGE" | null; // null: 사유 기록 전에 취소된 좌석
 }
 
 export interface TicketDetail {
@@ -31,6 +32,7 @@ export interface TicketDetail {
   orderedAt: string;
   status: string; // PAID / PARTIALLY_CANCELLED / CANCELLED
   cancelledAt: string | null;
+  cancellableUntil: string; // 관객 취소 마감 시각. 이 시각부터는 취소할 수 없다
   totalPrice: number;
   eventTitle: string;
   venueName: string;
