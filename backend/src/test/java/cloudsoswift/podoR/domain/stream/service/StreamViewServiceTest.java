@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.stream.service;
 
+import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.event.entity.EventSeat;
 import cloudsoswift.podoR.domain.event.entity.SeatStatus;
@@ -86,7 +87,7 @@ class StreamViewServiceTest {
         TicketingOrder o = order("O1");
         item(o);
         TicketingItem gone = item(o);
-        o.cancelItems(List.of(gone), now);
+        o.cancelItems(List.of(gone), CancelReason.USER, TicketingItem::getPrice, now);
         em.flush();
 
         StreamViewResponse res = service.view(viewer.getSeq(), "E1");
@@ -101,7 +102,7 @@ class StreamViewServiceTest {
     void 전부_취소하면_403() {
         TicketingOrder o = order("O1");
         TicketingItem only = item(o);
-        o.cancelItems(List.of(only), now);
+        o.cancelItems(List.of(only), CancelReason.USER, TicketingItem::getPrice, now);
         em.flush();
 
         assertForbidden(() -> service.view(viewer.getSeq(), "E1"));

@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.ticketing.controller;
 
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationNotAllowedException;
 import cloudsoswift.podoR.domain.ticketing.dto.CancelItemsRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.CreateOrderRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldRequest;
@@ -73,6 +74,12 @@ public class EventTicketingController {
         Long userSeq = (Long) authentication.getPrincipal();
         ticketingOrderService.cancelItems(userSeq, orderNumber, request.getTicketingItemSeqs());
         return ResponseEntity.noContent().build();
+    }
+
+    /** 환불 정책이 취소를 거절하면(예: 공연 시작 30분 전) 400 과 사유. */
+    @ExceptionHandler(CancellationNotAllowedException.class)
+    public ProblemDetail handleCancellationNotAllowed(CancellationNotAllowedException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
     /** 같은 주문을 동시에 취소(다른 탭, 공연장 배치 변경 등)해 낙관적 락이 실패하면 409. */

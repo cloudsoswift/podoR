@@ -6,6 +6,8 @@ import cloudsoswift.podoR.domain.event.repository.EventSeatRepository;
 import cloudsoswift.podoR.domain.seat.entity.Seat;
 import cloudsoswift.podoR.domain.seat.repository.SeatRepository;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
+import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
+import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingItemRepository;
@@ -49,6 +51,7 @@ public class VenueSeatmapService {
     private final EventSeatRepository eventSeatRepository;
     private final TicketingItemRepository ticketingItemRepository;
     private final SeatViewSnapshotCache seatViewSnapshotCache;
+    private final CancellationService cancellationService;
 
     /** 좌석 정체성. */
     record SeatLocation(String sectionKey, String rowNumber, Integer seatNumber) {
@@ -234,10 +237,8 @@ public class VenueSeatmapService {
             for (TicketingItem i : toCancel) {
                 byOrder.computeIfAbsent(i.getTicketingOrder(), k -> new ArrayList<>()).add(i);
             }
-            byOrder.forEach((order, list) -> {
-                int cancelled = order.cancelItems(list, now);
-                if (order.getPayment() != null) order.getPayment().cancelAmount(cancelled, now);
-            });
+            byOrder.forEach((order, list) ->
+                    cancellationService.cancel(order, list, CancelReason.VENUE_CHANGE, now));
             items.forEach(TicketingItem::detachEventSeat);
             // 연결 끊기를 먼저 DB 에 내보내야 회차 좌석 벌크 삭제가 FK 에 걸리지 않는다.
             ticketingItemRepository.flush();

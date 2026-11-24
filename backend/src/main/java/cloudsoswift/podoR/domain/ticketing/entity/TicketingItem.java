@@ -54,6 +54,15 @@ public class TicketingItem {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    // 취소 사유와 실제 환불액. 이 컬럼이 생기기 전에 취소된 항목은 null.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancel_reason", length = 20)
+    private CancelReason cancelReason;
+
+    // 환불 정책(수수료 등)에 따라 좌석가(price)보다 적을 수 있다.
+    @Column(name = "refund_amount")
+    private Integer refundAmount;
+
     @Builder
     public TicketingItem(TicketingOrder ticketingOrder, EventSeat eventSeat, String section, String rowNumber,
                          Integer seatNumber, String seatGrade, Integer price) {
@@ -84,9 +93,11 @@ public class TicketingItem {
         return STATUS_PAID.equals(status);
     }
 
-    void markCancelled(LocalDateTime at) {
+    void markCancelled(LocalDateTime at, CancelReason reason, int refundAmount) {
         this.status = STATUS_CANCELLED;
         this.cancelledAt = at;
+        this.cancelReason = reason;
+        this.refundAmount = refundAmount;
     }
 
     /** 회차 좌석과의 연결을 끊는다(좌석 정보는 스냅샷으로 남는다). */

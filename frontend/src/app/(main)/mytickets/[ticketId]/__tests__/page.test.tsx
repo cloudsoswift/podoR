@@ -10,7 +10,12 @@ import MyTicketDetailPage from "../page";
 const mockRouter = { replace: jest.fn(), push: jest.fn() };
 jest.mock("next/navigation", () => ({ useRouter: () => mockRouter }));
 
-const seat = (itemSeq: number, seatNumber: number, status: "PAID" | "CANCELLED" = "PAID") => ({
+const seat = (
+  itemSeq: number,
+  seatNumber: number,
+  status: "PAID" | "CANCELLED" = "PAID",
+  cancelReason: "USER" | "VENUE_CHANGE" | null = null,
+) => ({
   itemSeq,
   section: "A구역",
   rowNumber: "B",
@@ -19,6 +24,7 @@ const seat = (itemSeq: number, seatNumber: number, status: "PAID" | "CANCELLED" 
   price: 10000,
   status,
   cancelledAt: status === "CANCELLED" ? "2026-10-20T10:00:00" : null,
+  cancelReason,
 });
 
 const ticket = (patch: Partial<TicketDetail> = {}): TicketDetail => ({
@@ -27,6 +33,7 @@ const ticket = (patch: Partial<TicketDetail> = {}): TicketDetail => ({
   orderedAt: "2026-10-01T10:00:00",
   status: "PAID",
   cancelledAt: null,
+  cancellableUntil: "2099-01-01T18:30:00",
   totalPrice: 30000,
   eventTitle: "봄 콘서트",
   venueName: "올림픽홀",
@@ -124,4 +131,57 @@ test("전부 취소된 예매는 취소 버튼이 없다", async () => {
 
   expect(screen.queryByRole("button", { name: "예매 취소" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "선택한 좌석 취소" })).not.toBeInTheDocument();
+});
+
+test("공연장 사정으로 취소된 좌석은 사유를 보여 준다", async () => {
+  stub([ticket({ status: "PARTIALLY_CANCELLED", seats: [seat(11, 1), seat(12, 2, "CANCELLED", "VENUE_CHANGE")] })]);
+  await renderPage();
+
+  const row = screen.getByText("A구역 B열 2번").closest("li")!;
+  expect(within(row).getByText(/^공연장 사정으로 취소 · /)).toBeInTheDocument();
+});
+
+test("관객 취소 좌석은 관객 취소로", async () => {
+  stub([ticket({ status: "PARTIALLY_CANCELLED", seats: [seat(11, 1), seat(12, 2, "CANCELLED", "USER")] })]);
+  await renderPage();
+
+  const row = screen.getByText("A구역 B열 2번").closest("li")!;
+  expect(within(row).getByText(/^관객 취소 · /)).toBeInTheDocument();
+});
+
+test("사유 없는 취소 좌석은 취소됨으로", async () => {
+  stub([ticket({ status: "PARTIALLY_CANCELLED", seats: [seat(11, 1), seat(12, 2, "CANCELLED", null)] })]);
+  await renderPage();
+
+  const row = screen.getByText("A구역 B열 2번").closest("li")!;
+  expect(within(row).getByText(/^취소됨 · /)).toBeInTheDocument();
+});
+
+test("취소 마감이 지나면 취소 버튼과 체크박스 없이 안내", async () => {
+  stub([ticket({ cancellableUntil: "2020-01-01T18:30:00" })]);
+  await renderPage();
+
+  expect(screen.queryByRole("button", { name: "예매 취소" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "선택한 좌석 취소" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  expect(screen.getByText(/^취소 마감\(.+\)이 지나 취소할 수 없습니다\.$/)).toBeInTheDocument();
+});
+
+test("취소가 거절되면 서버 사유를 알린다", async () => {
+  stub([ticket()]);
+  server.use(
+    http.post(`${BASE_URL}/events/E1/order/O1/cancel`, () =>
+      HttpResponse.json({ status: 400, detail: "공연 시작 30분 전부터는 취소할 수 없습니다." }, { status: 400 }),
+    ),
+  );
+  const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
+  const user = userEvent.setup();
+  await renderPage();
+
+  await user.click(screen.getByRole("checkbox", { name: "A구역 B열 1번" }));
+  await user.click(screen.getByRole("button", { name: "선택한 좌석 취소" }));
+  await user.click(screen.getByRole("button", { name: "좌석 취소" }));
+
+  await waitFor(() => expect(alertSpy).toHaveBeenCalledWith("공연 시작 30분 전부터는 취소할 수 없습니다."));
+  alertSpy.mockRestore();
 });

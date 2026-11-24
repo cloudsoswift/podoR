@@ -4,6 +4,7 @@ import cloudsoswift.podoR.domain.event.entity.Event;
 import cloudsoswift.podoR.domain.event.entity.EventSeat;
 import cloudsoswift.podoR.domain.event.entity.SeatStatus;
 import cloudsoswift.podoR.domain.seat.entity.Seat;
+import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.user.entity.User;
@@ -42,7 +43,7 @@ class TicketingItemRepositoryTest {
     private void addItem(Event event, User owner, String orderNo, String orderStatus) {
         TicketingOrder order = em.persist(EntityFixtures.order(event, owner, orderNo, "PAID"));
         TicketingItem item = newItem(event, order);
-        if ("CANCELLED".equals(orderStatus)) order.cancelItems(List.of(item), LocalDateTime.now());
+        if ("CANCELLED".equals(orderStatus)) order.cancelItems(List.of(item), CancelReason.USER, TicketingItem::getPrice, LocalDateTime.now());
     }
 
     private TicketingItem newItem(Event event, TicketingOrder order) {
@@ -73,7 +74,7 @@ class TicketingItemRepositoryTest {
         TicketingOrder order = em.persist(EntityFixtures.order(e, user, "O1", "PAID"));
         TicketingItem kept = newItem(e, order);
         TicketingItem cancelled = newItem(e, order);
-        order.cancelItems(List.of(cancelled), LocalDateTime.now());
+        order.cancelItems(List.of(cancelled), CancelReason.USER, TicketingItem::getPrice, LocalDateTime.now());
         em.flush();
 
         assertThat(order.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
