@@ -15,7 +15,7 @@
 # 주의:
 #   - NEXT_PUBLIC_API_URL 은 next build 시점에 브라우저 번들에 박히므로 build arg 로 주입한다.
 #     (runtime environment 로는 안 먹는다.) 단일 오리진이므로 값은 `https://<host>/api` 형태.
-#   - postgres 는 최초 기동 시 backend/db/schema.sql 로 스키마를 자동 생성한다(빈 볼륨일 때만).
+#   - DB 스키마(podor)는 spring 기동 시 Flyway 가 backend/src/main/resources/db/migration 으로 만들고 갱신한다.
 # =====================================================================
 services:
   postgres:
@@ -28,8 +28,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # 최초 기동(빈 볼륨) 시에만 실행됨. 이미 데이터가 있으면 무시된다.
-      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     networks: [app-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
