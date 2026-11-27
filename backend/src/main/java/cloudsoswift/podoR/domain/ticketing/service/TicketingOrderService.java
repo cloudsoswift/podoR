@@ -11,6 +11,7 @@ import cloudsoswift.podoR.domain.queue.WaitingQueueService;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
+import cloudsoswift.podoR.domain.ticketing.dto.PreparedOrderResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderDetailResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderSummaryResponse;
@@ -20,6 +21,7 @@ import cloudsoswift.podoR.domain.ticketing.entity.Payment;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.ticketing.hold.SeatHoldService;
+import cloudsoswift.podoR.domain.ticketing.payment.PaymentProperties;
 import cloudsoswift.podoR.domain.ticketing.repository.PaymentRepository;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingItemRepository;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingOrderRepository;
@@ -35,10 +37,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -61,8 +65,12 @@ public class TicketingOrderService {
     private final SeatViewSnapshotCache snapshotCache;
     private final WaitingQueueService waitingQueue;
     private final CancellationService cancellationService;
+    private final PaymentProperties paymentProperties;
 
     private static final int DEFAULT_MAX_SEATS_PER_PERSON = 4;
+    private static final int MAX_ORDER_NAME_LENGTH = 100;
+    private static final List<String> VISIBLE_STATUSES = List.of(
+            TicketingOrder.STATUS_PAID, TicketingOrder.STATUS_PARTIALLY_CANCELLED, TicketingOrder.STATUS_CANCELLED);
 
     public enum DateBasis { BOOKED, WATCHED }
 
@@ -78,6 +86,7 @@ public class TicketingOrderService {
     public TicketingOrderDetailResponse getMyOrder(Long userSeq, String orderNumber) {
         TicketingOrder order = ticketingOrderRepository.findDetailByOrderNumber(orderNumber)
                 .filter(o -> o.getUser().getSeq().equals(userSeq))
+                .filter(o -> VISIBLE_STATUSES.contains(o.getStatus())) // 결제 전·실패·만료 주문은 없는 것으로 본다
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         return new TicketingOrderDetailResponse(order, cancellationService.userCancelDeadline(order));
     }
@@ -128,6 +137,65 @@ public class TicketingOrderService {
         long paid = ticketingItemRepository.countPaidSeatsInSeries(userSeq, seriesId);
         int held = seatHoldService.heldCountInSeries(userSeq, seriesId);
         return new SeatQuotaResponse(paid + held, max);
+    }
+
+    /**
+     * 결제 준비: 선점을 재검증하고 PENDING 주문 + READY 결제를 만든다(좌석은 아직 팔지 않는다).
+     * 같은 사용자·회차에 PENDING 이 있으면 좌석 집합이 같을 때 그대로 돌려주고,
+     * 다르면 기존 주문을 FAILED(REPLACED)로 닫고 새로 만든다. 선점은 PENDING TTL 로 연장한다.
+     */
+    @Transactional
+    public PreparedOrderResponse prepareOrder(String eventId, Long userSeq, List<Long> seatSeqs) {
+        if (seatSeqs == null || seatSeqs.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "no seats");
+        }
+        Event event = findEvent(eventId);
+        String seriesId = event.getSeriesId();
+        if (!seatHoldService.ownsAll(userSeq, seatSeqs)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "선점이 만료되었거나 유효하지 않습니다.");
+        }
+        enforceLimit(userSeq, seriesId, seatSeqs.size(), false);
+
+        List<EventSeat> seats = eventSeatRepository.findAllById(seatSeqs);
+        if (seats.size() != seatSeqs.size()
+                || seats.stream().anyMatch(s -> s.getStatus() != SeatStatus.AVAILABLE)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "좌석 정보가 유효하지 않습니다.");
+        }
+
+        // 동시 준비(여러 탭)로 PENDING 이 둘 이상일 수 있다. 같은 좌석 집합의 최신 1건만 살리고 나머지는 닫는다.
+        Set<Long> requested = new HashSet<>(seatSeqs);
+        List<TicketingOrder> pendings = ticketingOrderRepository.findPendingByUserAndEvent(userSeq, event.getSeq());
+        TicketingOrder order = pendings.stream()
+                .filter(p -> new HashSet<>(p.eventSeatSeqs()).equals(requested))
+                .findFirst().orElse(null);
+        for (TicketingOrder p : pendings) {
+            if (p != order) closeReplaced(p);
+        }
+        if (order == null) {
+            User user = userRepository.findById(userSeq)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "user not found"));
+            order = TicketingOrder.pending(event, user, generateOrderNumber(), seats);
+            ticketingOrderRepository.save(order);
+            paymentRepository.save(Payment.ready(order, order.getTotalPrice()));
+        }
+
+        seatHoldService.extend(userSeq, seriesId, seatSeqs, paymentProperties.pendingTtl());
+        return new PreparedOrderResponse(order.getOrderNumber(), order.getTotalPrice(),
+                orderName(event, seatSeqs.size()));
+    }
+
+    private void closeReplaced(TicketingOrder old) {
+        old.markFailed();
+        Payment payment = old.getPayment();
+        if (payment == null && old.getSeq() != null) {
+            payment = paymentRepository.findByTicketingOrder_Seq(old.getSeq()).orElse(null);
+        }
+        if (payment != null) payment.fail("REPLACED", "다른 좌석으로 다시 주문");
+    }
+
+    private static String orderName(Event event, int seatCount) {
+        String name = event.getTitle() + " (" + seatCount + "석)";
+        return name.length() > MAX_ORDER_NAME_LENGTH ? name.substring(0, MAX_ORDER_NAME_LENGTH) : name;
     }
 
     /** 결제 확정: hold 재검증 → 좌석 SOLD + 주문/결제 생성. */

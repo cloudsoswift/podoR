@@ -5,7 +5,7 @@ import cloudsoswift.podoR.domain.ticketing.dto.CancelItemsRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.CreateOrderRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldRequest;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
-import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
+import cloudsoswift.podoR.domain.ticketing.dto.PreparedOrderResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.service.TicketingOrderService;
 import lombok.RequiredArgsConstructor;
@@ -47,13 +47,14 @@ public class EventTicketingController {
         return ResponseEntity.ok(ticketingOrderService.getMyQuota(eventId, userSeq));
     }
 
+    /** 결제 준비: PENDING 주문을 만들고 토스 결제창에 넘길 주문번호·금액·주문명을 돌려준다. */
     @PostMapping("/order")
-    public ResponseEntity<OrderCreatedResponse> createOrder(@PathVariable String eventId,
-                                                            @RequestBody CreateOrderRequest request,
-                                                            Authentication authentication) {
+    public ResponseEntity<PreparedOrderResponse> createOrder(@PathVariable String eventId,
+                                                             @RequestBody CreateOrderRequest request,
+                                                             Authentication authentication) {
         Long userSeq = (Long) authentication.getPrincipal();
-        return ResponseEntity.ok(ticketingOrderService.confirmOrder(
-                eventId, userSeq, request.getEventSeatSeqs(), request.getPaymentMethod()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ticketingOrderService.prepareOrder(eventId, userSeq, request.getEventSeatSeqs()));
     }
 
     @DeleteMapping("/order/{orderNumber}")

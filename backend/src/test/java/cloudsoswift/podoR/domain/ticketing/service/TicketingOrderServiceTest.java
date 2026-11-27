@@ -15,11 +15,13 @@ import cloudsoswift.podoR.domain.ticketing.cancel.CancellationNotAllowedExceptio
 import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
 import cloudsoswift.podoR.domain.ticketing.cancel.DefaultRefundPolicy;
 import cloudsoswift.podoR.domain.ticketing.cancel.RefundProperties;
+import cloudsoswift.podoR.domain.ticketing.dto.PreparedOrderResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import cloudsoswift.podoR.domain.ticketing.hold.SeatHoldService;
+import cloudsoswift.podoR.domain.ticketing.payment.PaymentProperties;
 import cloudsoswift.podoR.domain.ticketing.repository.PaymentRepository;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingItemRepository;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingOrderRepository;
@@ -60,6 +62,8 @@ class TicketingOrderServiceTest {
     @Spy CancellationService cancellationService = new CancellationService(
             new DefaultRefundPolicy(new RefundProperties(Duration.ofMinutes(30))));
 
+    @Spy PaymentProperties paymentProperties = new PaymentProperties("mock", Duration.ofMinutes(15), null);
+
     @InjectMocks TicketingOrderService service;
 
     static final String EVENT_ID = "EVT1";
@@ -71,6 +75,7 @@ class TicketingOrderServiceTest {
         lenient().when(e.getSeq()).thenReturn(1L);
         lenient().when(e.getSeriesId()).thenReturn(SERIES);
         lenient().when(e.getEventId()).thenReturn(EVENT_ID);
+        lenient().when(e.getTitle()).thenReturn("공연");
         lenient().when(e.getEventDate()).thenReturn(LocalDateTime.now().plusDays(7));
         return e;
     }
@@ -247,6 +252,174 @@ class TicketingOrderServiceTest {
         assertThatThrownBy(() -> service.confirmOrder(EVENT_ID, USER, seats, "MOCK"))
                 .isInstanceOf(ResponseStatusException.class);
         verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
+    }
+
+    // ---- 준비(prepare) ----
+
+    private void stubPrepare(Event event, List<Long> seats) {
+        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
+        when(seatHoldService.ownsAll(USER, seats)).thenReturn(true);
+        stubSeries(4);
+        when(ticketingItemRepository.countPaidSeatsInSeries(USER, SERIES)).thenReturn(0L);
+    }
+
+    @Test
+    void 준비는_PENDING_주문과_READY_결제를_만들고_금액은_좌석가격합() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(1L, 2L);
+        stubPrepare(event, seats);
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
+        EventSeat s2 = mockSeat(2L, event, SeatStatus.AVAILABLE, 20000);
+        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s1, s2));
+        when(userRepository.findById(USER)).thenReturn(Optional.of(mock(cloudsoswift.podoR.domain.user.entity.User.class)));
+        when(ticketingOrderRepository.findPendingByUserAndEvent(USER, 1L)).thenReturn(List.of());
+
+        PreparedOrderResponse r = service.prepareOrder(EVENT_ID, USER, seats);
+
+        org.mockito.ArgumentCaptor<TicketingOrder> oc = org.mockito.ArgumentCaptor.forClass(TicketingOrder.class);
+        verify(ticketingOrderRepository).save(oc.capture());
+        TicketingOrder saved = oc.getValue();
+        assertThat(saved.getStatus()).isEqualTo(TicketingOrder.STATUS_PENDING);
+        assertThat(saved.getTotalPrice()).isEqualTo(30000);
+        org.mockito.ArgumentCaptor<Payment> pc = org.mockito.ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(pc.capture());
+        assertThat(pc.getValue().getStatus()).isEqualTo("READY");
+        assertThat(pc.getValue().getAmount()).isEqualTo(30000L);
+        assertThat(r.orderNumber()).isEqualTo(saved.getOrderNumber());
+        assertThat(r.amount()).isEqualTo(30000);
+        assertThat(r.orderName()).isEqualTo("공연 (2석)");
+        verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
+    }
+
+    @Test
+    void 준비는_선점을_대기만료시간으로_연장한다() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(1L);
+        stubPrepare(event, seats);
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
+        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s1));
+        when(userRepository.findById(USER)).thenReturn(Optional.of(mock(cloudsoswift.podoR.domain.user.entity.User.class)));
+        when(ticketingOrderRepository.findPendingByUserAndEvent(USER, 1L)).thenReturn(List.of());
+
+        service.prepareOrder(EVENT_ID, USER, seats);
+
+        verify(seatHoldService).extend(USER, SERIES, seats, Duration.ofMinutes(15));
+    }
+
+    private TicketingOrder pendingOrder(Event event, EventSeat... seats) {
+        cloudsoswift.podoR.domain.user.entity.User owner = mock(cloudsoswift.podoR.domain.user.entity.User.class);
+        return TicketingOrder.pending(event, owner, "OLD-1", List.of(seats));
+    }
+
+    @Test
+    void 같은_좌석으로_다시_준비하면_기존_주문을_돌려준다() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(2L, 1L);
+        stubPrepare(event, seats);
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
+        EventSeat s2 = mockSeat(2L, event, SeatStatus.AVAILABLE, 20000);
+        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s2, s1));
+        TicketingOrder existing = pendingOrder(event, s1, s2);
+        when(ticketingOrderRepository.findPendingByUserAndEvent(USER, 1L)).thenReturn(List.of(existing));
+
+        PreparedOrderResponse r = service.prepareOrder(EVENT_ID, USER, seats);
+
+        assertThat(r.orderNumber()).isEqualTo("OLD-1");
+        assertThat(r.amount()).isEqualTo(30000);
+        assertThat(existing.getStatus()).isEqualTo(TicketingOrder.STATUS_PENDING);
+        verify(ticketingOrderRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
+        verify(seatHoldService).extend(USER, SERIES, seats, Duration.ofMinutes(15));
+    }
+
+    @Test
+    void 다른_좌석이면_기존을_REPLACED_로_닫고_새로_만든다() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(3L);
+        stubPrepare(event, seats);
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
+        EventSeat s3 = mockSeat(3L, event, SeatStatus.AVAILABLE, 5000);
+        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s3));
+        when(userRepository.findById(USER)).thenReturn(Optional.of(mock(cloudsoswift.podoR.domain.user.entity.User.class)));
+        TicketingOrder existing = pendingOrder(event, s1);
+        Payment oldPayment = Payment.ready(existing, 10000L);
+        ReflectionTestUtils.setField(existing, "payment", oldPayment);
+        when(ticketingOrderRepository.findPendingByUserAndEvent(USER, 1L)).thenReturn(List.of(existing));
+
+        PreparedOrderResponse r = service.prepareOrder(EVENT_ID, USER, seats);
+
+        assertThat(existing.getStatus()).isEqualTo(TicketingOrder.STATUS_FAILED);
+        assertThat(oldPayment.getStatus()).isEqualTo("FAILED");
+        assertThat(oldPayment.getFailCode()).isEqualTo("REPLACED");
+        assertThat(oldPayment.getFailMessage()).isEqualTo("다른 좌석으로 다시 주문");
+        assertThat(r.orderNumber()).isNotEqualTo("OLD-1");
+        assertThat(r.amount()).isEqualTo(5000);
+        verify(ticketingOrderRepository).save(any());
+    }
+
+    @Test
+    void PENDING_이_두개_있어도_준비는_500_없이_하나만_남긴다() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(1L);
+        stubPrepare(event, seats);
+        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
+        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s1));
+        cloudsoswift.podoR.domain.user.entity.User owner = mock(cloudsoswift.podoR.domain.user.entity.User.class);
+        TicketingOrder newest = TicketingOrder.pending(event, owner, "NEW-1", List.of(s1));
+        TicketingOrder older = TicketingOrder.pending(event, owner, "OLD-1", List.of(s1));
+        Payment olderPayment = Payment.ready(older, 10000L);
+        ReflectionTestUtils.setField(older, "payment", olderPayment);
+        when(ticketingOrderRepository.findPendingByUserAndEvent(USER, 1L)).thenReturn(List.of(newest, older));
+
+        PreparedOrderResponse r = service.prepareOrder(EVENT_ID, USER, seats);
+
+        assertThat(r.orderNumber()).isEqualTo("NEW-1");
+        assertThat(newest.getStatus()).isEqualTo(TicketingOrder.STATUS_PENDING);
+        assertThat(older.getStatus()).isEqualTo(TicketingOrder.STATUS_FAILED);
+        assertThat(olderPayment.getFailCode()).isEqualTo("REPLACED");
+        verify(ticketingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void 선점이_없으면_409() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(1L);
+        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
+        when(seatHoldService.ownsAll(USER, seats)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.prepareOrder(EVENT_ID, USER, seats))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("409");
+        verify(ticketingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void 준비_빈_좌석목록은_400() {
+        assertThatThrownBy(() -> service.prepareOrder(EVENT_ID, USER, List.of()))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("400");
+    }
+
+    @Test
+    void 준비_한도초과면_409() {
+        Event event = mockEvent();
+        List<Long> seats = List.of(1L, 2L);
+        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
+        when(seatHoldService.ownsAll(USER, seats)).thenReturn(true);
+        stubSeries(4);
+        when(ticketingItemRepository.countPaidSeatsInSeries(USER, SERIES)).thenReturn(3L);
+
+        assertThatThrownBy(() -> service.prepareOrder(EVENT_ID, USER, seats))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("최대");
+        verify(ticketingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void getMyOrder_PENDING_주문은_404() {
+        Event event = mockEvent();
+        TicketingOrder order = paidOrder(event, paidItem(11L, mockSeat(1L, event, SeatStatus.SOLD, 10000), 10000));
+        ReflectionTestUtils.setField(order, "status", TicketingOrder.STATUS_PENDING);
+
+        assertThatThrownBy(() -> service.getMyOrder(USER, "O1"))
+                .isInstanceOf(ResponseStatusException.class).hasMessageContaining("404");
     }
 
     // ---- 부분 취소 ----

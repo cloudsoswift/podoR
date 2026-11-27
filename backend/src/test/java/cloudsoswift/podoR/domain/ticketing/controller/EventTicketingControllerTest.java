@@ -2,7 +2,7 @@ package cloudsoswift.podoR.domain.ticketing.controller;
 
 import cloudsoswift.podoR.config.SecurityConfig;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
-import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
+import cloudsoswift.podoR.domain.ticketing.dto.PreparedOrderResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.service.TicketingOrderService;
 import cloudsoswift.podoR.security.jwt.JwtAuthenticationFilter;
@@ -114,16 +114,18 @@ class EventTicketingControllerTest {
     }
 
     @Test
-    void createOrder_바디바인딩_200_orderNumber() throws Exception {
-        when(service.confirmOrder("EVT1", 100L, List.of(1L, 2L), "MOCK"))
-                .thenReturn(new OrderCreatedResponse("ORD-1"));
+    void POST_order_는_orderNumber_amount_orderName_을_돌려준다() throws Exception {
+        when(service.prepareOrder("EVT1", 100L, List.of(1L, 2L)))
+                .thenReturn(new PreparedOrderResponse("ORD-1", 30000, "공연 (2석)"));
 
         mvc.perform(post("/events/EVT1/order").principal(AUTH)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"eventSeatSeqs\":[1,2],\"paymentMethod\":\"MOCK\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orderNumber").value("ORD-1"));
-        verify(service).confirmOrder("EVT1", 100L, List.of(1L, 2L), "MOCK");
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderNumber").value("ORD-1"))
+                .andExpect(jsonPath("$.amount").value(30000))
+                .andExpect(jsonPath("$.orderName").value("공연 (2석)"));
+        verify(service).prepareOrder("EVT1", 100L, List.of(1L, 2L));
     }
 
     @Test

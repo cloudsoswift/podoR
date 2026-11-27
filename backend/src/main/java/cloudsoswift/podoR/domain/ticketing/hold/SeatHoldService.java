@@ -96,6 +96,20 @@ public class SeatHoldService {
         return count;
     }
 
+    /**
+     * 결제창을 띄운 동안 선점이 풀리지 않도록 TTL 을 늘린다.
+     * 이 사용자 소유 좌석 키와 시리즈 집합 키만 대상이며, 타인 소유·만료된 좌석은 건드리지 않는다.
+     */
+    public void extend(long userSeq, String seriesId, List<Long> seatSeqs, Duration ttl) {
+        String me = String.valueOf(userSeq);
+        for (Long seq : seatSeqs) {
+            if (me.equals(redis.opsForValue().get(holdKey(seq)))) {
+                redis.expire(holdKey(seq), ttl);
+            }
+        }
+        redis.expire(seriesKey(userSeq, seriesId), ttl);
+    }
+
     /** 지정 좌석들의 선점 해제(+시리즈 집합에서 제거). */
     public void release(long userSeq, String seriesId, List<Long> seatSeqs) {
         String setKey = seriesKey(userSeq, seriesId);

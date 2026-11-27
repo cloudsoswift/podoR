@@ -132,4 +132,18 @@ class SeatHoldServiceIntegrationTest {
         assertThat(service.heldAmong(List.of(1L, 2L, 3L, 4L)))
                 .containsExactlyInAnyOrder(1L, 3L);
     }
+
+    @Test
+    void extend_는_좌석키와_집합키_TTL을_늘린다() {
+        service.tryHoldAll(USER, SERIES, List.of(1L, 2L));
+        service.tryHoldAll(OTHER, SERIES, List.of(3L));
+
+        service.extend(USER, SERIES, List.of(1L, 2L, 3L), java.time.Duration.ofMinutes(15));
+
+        assertThat(redis.getExpire("hold:1")).isGreaterThan(300L).isLessThanOrEqualTo(900L);
+        assertThat(redis.getExpire("hold:2")).isGreaterThan(300L);
+        assertThat(redis.getExpire("holds:user:100:series:S1")).isGreaterThan(300L);
+        // 타인 소유 좌석은 건드리지 않는다
+        assertThat(redis.getExpire("hold:3")).isLessThanOrEqualTo(300L);
+    }
 }
