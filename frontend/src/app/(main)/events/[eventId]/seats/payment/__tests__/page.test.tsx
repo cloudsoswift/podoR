@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/mocks/server";
 import { BASE_URL } from "@/mocks/handlers";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
+import { isPaymentRedirect } from "@/lib/paymentRedirect";
 import PaymentPage from "../page";
 
 const mockRouter = { replace: jest.fn(), push: jest.fn() };
@@ -123,7 +124,7 @@ test("키가_있으면_위젯을_금액과_함께_렌더하고_결제요청에_�
     orderId: "N1",
     orderName: "봄 콘서트 2석",
     successUrl: "http://localhost/events/E1/payment/success",
-    failUrl: "http://localhost/events/E1/payment/fail?orderNumber=N1&seats=1,2",
+    failUrl: "http://localhost/events/E1/payment/fail?orderNumber=N1&seats=1%2C2",
   });
 });
 
@@ -153,4 +154,23 @@ test("결제 없이 떠나면 선점을 해제한다", async () => {
   unmount();
 
   await waitFor(() => expect(releaseBodies).toEqual([{ eventSeatSeqs: [1, 2] }]));
+});
+
+test("결제창에서 bfcache 로 돌아오면(pageshow persisted) 버튼과 이동 표시를 되돌린다", async () => {
+  process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY = "test_gck_key";
+  stub();
+  await renderPage();
+
+  await userEvent.click(await screen.findByRole("button", { name: "결제하기" }));
+  expect(screen.getByRole("button", { name: "결제창으로 이동 중…" })).toBeDisabled();
+  expect(isPaymentRedirect("E1")).toBe(true);
+
+  await act(async () => {
+    const e = new Event("pageshow");
+    Object.defineProperty(e, "persisted", { value: true });
+    window.dispatchEvent(e);
+  });
+
+  expect(await screen.findByRole("button", { name: "결제하기" })).toBeEnabled();
+  expect(isPaymentRedirect("E1")).toBe(false);
 });

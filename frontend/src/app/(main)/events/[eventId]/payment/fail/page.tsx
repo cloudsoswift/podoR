@@ -11,7 +11,7 @@ const USER_CANCELED = "PAY_PROCESS_CANCELED";
 
 /**
  * 토스 failUrl. 쿼리(orderNumber, seats 는 우리가, code, message 는 토스가 붙인다)로 실패를 기록하고
- * 사유를 보여준다. 서버가 실패 기록 시 선점을 해제한다.
+ * 사유를 보여준다. 서버는 실패를 기록해도 선점을 유지한다("다시 결제하기"가 가능하도록).
  */
 export default function PaymentFailPage({
   params,

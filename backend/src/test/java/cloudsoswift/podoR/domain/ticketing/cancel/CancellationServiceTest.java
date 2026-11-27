@@ -191,6 +191,16 @@ class CancellationServiceTest {
     }
 
     @Test
+    void MOCK_결제는_paymentKey_가_있어도_게이트웨이를_부르지_않는다() {
+        payment.complete("mock-O1", "MOCK", BEFORE.minusDays(1));
+
+        service.cancel(order, List.of(a), CancelReason.USER, BEFORE);
+
+        assertThat(a.isActive()).isFalse();
+        assertThat(gateway.cancelCalls()).isEmpty();
+    }
+
+    @Test
     void 게이트웨이_실패는_예외로_전파() {
         paidWithToss();
         gateway.failNext("PROVIDER_ERROR", "일시적인 오류");

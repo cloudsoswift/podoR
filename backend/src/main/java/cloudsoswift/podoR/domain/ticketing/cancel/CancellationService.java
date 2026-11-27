@@ -70,8 +70,8 @@ public class CancellationService {
         }
         beforeRefund.run();
         if (payment != null) {
-            // paymentKey 없는 기존(MOCK) 결제와 0원 환불은 PG 를 부르지 않는다.
-            if (payment.getPaymentKey() != null && refunded > 0) {
+            // paymentKey 없는 기존 결제, MOCK 결제(게이트웨이를 toss 로 바꾼 뒤에도), 0원 환불은 PG 를 부르지 않는다.
+            if (payment.getPaymentKey() != null && !isMockPayment(payment) && refunded > 0) {
                 if (entityManager != null) {
                     entityManager.flush();
                 }
@@ -80,6 +80,10 @@ public class CancellationService {
             }
         }
         return refunded;
+    }
+
+    private static boolean isMockPayment(Payment payment) {
+        return "MOCK".equals(payment.getMethod()) || payment.getPaymentKey().startsWith("mock-");
     }
 
     /**

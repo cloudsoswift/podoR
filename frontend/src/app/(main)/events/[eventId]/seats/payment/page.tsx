@@ -97,6 +97,18 @@ export default function PaymentPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, done, seatsParam]);
 
+  // 토스에서 브라우저 뒤로가기로 bfcache 복원되면 paying 과 이동 표시가 그대로 남는다 — 되돌린다.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        clearPaymentRedirect(eventId);
+        setPaying(false);
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [eventId]);
+
   async function handleWidgetPay(order: PreparedOrder) {
     const widgets = widgetsRef.current;
     if (!widgets) return;
@@ -108,7 +120,10 @@ export default function PaymentPage({
         orderId: order.orderNumber,
         orderName: order.orderName,
         successUrl: `${origin}/events/${eventId}/payment/success`,
-        failUrl: `${origin}/events/${eventId}/payment/fail?orderNumber=${order.orderNumber}&seats=${seatSeqs.join(",")}`,
+        failUrl: `${origin}/events/${eventId}/payment/fail?${new URLSearchParams({
+          orderNumber: order.orderNumber,
+          seats: seatSeqs.join(","),
+        })}`,
       });
     } catch (e) {
       // 결제창을 띄우지 못함(파라미터 오류 등) — 페이지에 남으므로 이동 표시를 되돌린다.

@@ -56,19 +56,22 @@ export async function confirmPayment(
   body: { paymentKey: string; amount: number },
 ): Promise<{ orderNumber: string }> {
   const { data } = await apiClient.post<{ orderNumber: string }>(
-    `/events/${eventId}/order/${orderNumber}/confirm`,
+    `/events/${encodeURIComponent(eventId)}/order/${encodeURIComponent(orderNumber)}/confirm`,
     body,
   );
   return data;
 }
 
-// 결제 실패 기록: 토스 failUrl 의 code·message 를 남기고 서버가 선점을 해제한다.
+// 결제 실패 기록: 토스 failUrl 의 code·message 를 남긴다. 선점은 서버가 유지하므로 '다시 결제하기'가 가능하다.
 export async function failPayment(
   eventId: string,
   orderNumber: string,
   body: { code: string; message: string },
 ): Promise<void> {
-  await apiClient.post(`/events/${eventId}/order/${orderNumber}/fail`, body);
+  await apiClient.post(
+    `/events/${encodeURIComponent(eventId)}/order/${encodeURIComponent(orderNumber)}/fail`,
+    body,
+  );
 }
 
 // 남은 좌석 전부 취소
