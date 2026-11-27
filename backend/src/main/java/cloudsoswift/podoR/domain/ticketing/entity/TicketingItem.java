@@ -18,6 +18,9 @@ public class TicketingItem {
 
     public static final String STATUS_PAID = "PAID";
     public static final String STATUS_CANCELLED = "CANCELLED";
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_EXPIRED = "EXPIRED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -91,6 +94,11 @@ public class TicketingItem {
 
     public boolean isActive() {
         return STATUS_PAID.equals(status);
+    }
+
+    /** PENDING 항목의 상태 전이(결제 승인/실패/만료). 주문이 상태 검증을 맡는다. */
+    void changeStatus(String status) {
+        this.status = status;
     }
 
     void markCancelled(LocalDateTime at, CancelReason reason, int refundAmount) {

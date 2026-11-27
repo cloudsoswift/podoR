@@ -1,6 +1,7 @@
 package cloudsoswift.podoR.domain.ticketing.entity;
 
 import cloudsoswift.podoR.domain.event.entity.Event;
+import cloudsoswift.podoR.domain.event.entity.EventSeat;
 import cloudsoswift.podoR.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -84,6 +85,52 @@ public class TicketingOrder {
     public static final String STATUS_PAID = "PAID";
     public static final String STATUS_PARTIALLY_CANCELLED = "PARTIALLY_CANCELLED";
     public static final String STATUS_CANCELLED = "CANCELLED";
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_EXPIRED = "EXPIRED";
+
+    /** 결제 승인 전 주문. 항목도 PENDING, 총액은 좌석가 합. */
+    public static TicketingOrder pending(Event event, User user, String orderNumber, List<EventSeat> seats) {
+        int total = seats.stream().mapToInt(EventSeat::getPrice).sum();
+        TicketingOrder order = TicketingOrder.builder()
+                .event(event).user(user).orderNumber(orderNumber)
+                .totalPrice(total).status(STATUS_PENDING).build();
+        for (EventSeat es : seats) {
+            TicketingItem item = TicketingItem.of(es);
+            item.changeStatus(TicketingItem.STATUS_PENDING);
+            order.addItem(item);
+        }
+        order.orderedAt = LocalDateTime.now();
+        return order;
+    }
+
+    public boolean isPending() {
+        return STATUS_PENDING.equals(status);
+    }
+
+    public List<Long> eventSeatSeqs() {
+        return items.stream().map(i -> i.getEventSeat().getSeq()).toList();
+    }
+
+    public void markPaid() {
+        transition(STATUS_PAID, TicketingItem.STATUS_PAID);
+    }
+
+    public void markFailed() {
+        transition(STATUS_FAILED, TicketingItem.STATUS_FAILED);
+    }
+
+    public void markExpired() {
+        transition(STATUS_EXPIRED, TicketingItem.STATUS_EXPIRED);
+    }
+
+    private void transition(String orderStatus, String itemStatus) {
+        if (!isPending()) {
+            throw new IllegalStateException("PENDING 주문만 상태를 바꿀 수 있습니다. 현재: " + status);
+        }
+        this.status = orderStatus;
+        items.forEach(i -> i.changeStatus(itemStatus));
+    }
 
     /** 취소되지 않은 항목. */
     public List<TicketingItem> activeItems() {

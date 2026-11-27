@@ -42,6 +42,16 @@ public class Payment {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    // 토스 paymentKey. V1 의 pg_transaction_id 컬럼에 저장한다.
+    @Column(name = "pg_transaction_id", length = 255)
+    private String paymentKey;
+
+    @Column(name = "fail_code", length = 50)
+    private String failCode;
+
+    @Column(name = "fail_message", length = 500)
+    private String failMessage;
+
     @Builder
     public Payment(TicketingOrder ticketingOrder, String method, Long amount) {
         this.ticketingOrder = ticketingOrder;
@@ -50,6 +60,33 @@ public class Payment {
         this.status = "COMPLETED";
         this.cancelledAmount = 0L;
         this.paidAt = LocalDateTime.now();
+    }
+
+    /** 결제 승인 대기 상태. 승인 전이라 paidAt 이 없다. */
+    public static Payment ready(TicketingOrder order, long amount) {
+        Payment p = new Payment();
+        p.ticketingOrder = order;
+        p.amount = amount;
+        p.status = "READY";
+        p.cancelledAmount = 0L;
+        return p;
+    }
+
+    public void complete(String paymentKey, String method, LocalDateTime at) {
+        this.paymentKey = paymentKey;
+        this.method = method;
+        this.status = "COMPLETED";
+        this.paidAt = at;
+    }
+
+    public void fail(String code, String message) {
+        this.status = "FAILED";
+        this.failCode = code;
+        this.failMessage = message;
+    }
+
+    public void expire() {
+        this.status = "EXPIRED";
     }
 
     /**

@@ -1,6 +1,9 @@
 package cloudsoswift.podoR.domain.ticketing.entity;
 
+import cloudsoswift.podoR.domain.event.entity.EventSeat;
+import cloudsoswift.podoR.domain.seat.entity.Seat;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -122,5 +125,58 @@ class TicketingOrderTest {
 
         assertThat(p.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
         assertThat(p.getCancelledAt()).isNull();
+    }
+
+    private EventSeat eventSeat(long seq, int price) {
+        Seat seat = Seat.builder().section("A구역").rowNumber("A").seatNumber((int) seq).build();
+        EventSeat es = EventSeat.builder().seat(seat).seatGrade("VIP").price(price).build();
+        ReflectionTestUtils.setField(es, "seq", seq);
+        return es;
+    }
+
+    private TicketingOrder pendingOrder() {
+        return TicketingOrder.pending(null, null, "P1", List.of(eventSeat(1, 10000), eventSeat(2, 20000)));
+    }
+
+    @Test
+    void pending_주문은_항목도_PENDING_이고_합계를_계산한다() {
+        TicketingOrder o = pendingOrder();
+
+        assertThat(o.getStatus()).isEqualTo("PENDING");
+        assertThat(o.isPending()).isTrue();
+        assertThat(o.getTotalPrice()).isEqualTo(30000);
+        assertThat(o.getOrderedAt()).isNotNull();
+        assertThat(o.getItems()).extracting(TicketingItem::getStatus).containsOnly("PENDING");
+        assertThat(o.eventSeatSeqs()).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void markPaid_는_주문과_항목을_PAID_로() {
+        TicketingOrder o = pendingOrder();
+        o.markPaid();
+        assertThat(o.getStatus()).isEqualTo("PAID");
+        assertThat(o.getItems()).extracting(TicketingItem::getStatus).containsOnly("PAID");
+        assertThat(o.isCancellable()).isTrue();
+    }
+
+    @Test
+    void PENDING_이_아니면_markPaid_는_예외() {
+        TicketingOrder o = pendingOrder();
+        o.markFailed();
+        assertThatThrownBy(o::markPaid).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void markFailed_는_PENDING_에서만_항목까지() {
+        TicketingOrder o = pendingOrder();
+        o.markFailed();
+        assertThat(o.getStatus()).isEqualTo("FAILED");
+        assertThat(o.getItems()).extracting(TicketingItem::getStatus).containsOnly("FAILED");
+        assertThatThrownBy(o::markFailed).isInstanceOf(IllegalStateException.class);
+
+        TicketingOrder e = pendingOrder();
+        e.markExpired();
+        assertThat(e.getStatus()).isEqualTo("EXPIRED");
+        assertThat(e.getItems()).extracting(TicketingItem::getStatus).containsOnly("EXPIRED");
     }
 }
