@@ -10,7 +10,6 @@ import cloudsoswift.podoR.domain.event.repository.EventSeriesRepository;
 import cloudsoswift.podoR.domain.queue.WaitingQueueService;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.dto.HoldResponse;
-import cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.PreparedOrderResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.SeatQuotaResponse;
 import cloudsoswift.podoR.domain.ticketing.dto.TicketingOrderDetailResponse;
@@ -30,6 +29,7 @@ import cloudsoswift.podoR.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -198,53 +198,18 @@ public class TicketingOrderService {
         return name.length() > MAX_ORDER_NAME_LENGTH ? name.substring(0, MAX_ORDER_NAME_LENGTH) : name;
     }
 
-    /** 결제 확정: hold 재검증 → 좌석 SOLD + 주문/결제 생성. */
-    @Transactional
-    public OrderCreatedResponse confirmOrder(String eventId, Long userSeq, List<Long> seatSeqs, String method) {
-        if (seatSeqs == null || seatSeqs.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "no seats");
-        }
-        Event event = findEvent(eventId);
-        if (!seatHoldService.ownsAll(userSeq, seatSeqs)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "선점이 만료되었거나 유효하지 않습니다.");
-        }
-        enforceLimit(userSeq, event.getSeriesId(), seatSeqs.size(), false);
-
-        List<EventSeat> seats = eventSeatRepository.findAllById(seatSeqs);
-        if (seats.size() != seatSeqs.size()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "좌석 정보가 유효하지 않습니다.");
-        }
-        int total = seats.stream().mapToInt(EventSeat::getPrice).sum();
-
-        long version = seatVersionGenerator.next(event.getSeq());
-        int affected = eventSeatRepository.updateStatusIfCurrent(
-                seatSeqs, event.getSeq(), SeatStatus.AVAILABLE, SeatStatus.SOLD, version);
-        if (affected != seatSeqs.size()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "좌석이 이미 판매되었습니다.");
-        }
-
-        User user = userRepository.findById(userSeq)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "user not found"));
-        TicketingOrder order = TicketingOrder.builder()
-                .event(event).user(user)
-                .orderNumber(generateOrderNumber())
-                .totalPrice(total)
-                .status("PAID")
-                .build();
-        for (EventSeat es : seats) {
-            order.addItem(TicketingItem.of(es)); // 예매 시점 좌석 정보를 항목에 복사
-        }
-        ticketingOrderRepository.save(order);
-        paymentRepository.save(Payment.builder()
-                .ticketingOrder(order).method(method != null ? method : "MOCK").amount((long) total).build());
-
-        seatHoldService.release(userSeq, event.getSeriesId(), seatSeqs);
+    /**
+     * 결제 확정 후처리(커밋 뒤에 호출): 선점 해제, 좌석맵 캐시 비우기, 대기열 슬롯 반납.
+     * Redis 만 건드리므로 DB 트랜잭션에 참여하지 않는다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void finishConfirmed(String eventId, Long userSeq, String seriesId, List<Long> seatSeqs) {
+        seatHoldService.release(userSeq, seriesId, seatSeqs);
         snapshotCache.evict(eventId);
         // 주문이 끝났으면 대기열 슬롯을 즉시 반납한다. 입장권 TTL 이 남았다고 붙들고 있으면
         // 그만큼 뒷사람의 입장이 늦어진다. (추가 구매는 다시 줄을 서야 하지만,
         // 1인 한도가 수량을 통제하므로 한 번에 골라 담으면 된다.)
         waitingQueue.leave(eventId, userSeq);
-        return new OrderCreatedResponse(order.getOrderNumber());
     }
 
     /** 주문 전체 취소: 남은(취소되지 않은) 항목을 모두 취소한다. */

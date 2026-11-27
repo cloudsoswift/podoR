@@ -28,7 +28,7 @@ class TicketingOrderRepositoryTest {
     @Autowired TicketingOrderRepository orderRepository;
     @Autowired PaymentRepository paymentRepository;
 
-    /** confirmOrder 와 같은 순서: 새 주문을 save 한 뒤 그 객체로 결제를 저장한다. */
+    /** 준비(prepareOrder)와 같은 순서: 새 주문을 save 한 뒤 그 객체로 결제를 저장한다. */
     @Test
     void 새_주문을_save_하면_같은_객체가_영속화되어_결제가_참조할_수_있다() {
         User user = em.persist(EntityFixtures.user("u1"));

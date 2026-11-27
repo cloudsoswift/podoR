@@ -196,62 +196,15 @@ class TicketingOrderServiceTest {
     }
 
     @Test
-    void confirmOrder_성공시_좌석SOLD전이_release_캐시evict_그리고_대기열_슬롯반납() {
-        Event event = mockEvent();
-        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
+    void 확정_후처리는_선점해제_캐시evict_그리고_대기열_슬롯반납() {
         List<Long> seats = List.of(1L, 2L);
-        when(seatHoldService.ownsAll(USER, seats)).thenReturn(true);
-        stubSeries(4);
-        when(ticketingItemRepository.countPaidSeatsInSeries(USER, SERIES)).thenReturn(0L);
-        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
-        EventSeat s2 = mockSeat(2L, event, SeatStatus.AVAILABLE, 20000);
-        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s1, s2));
-        when(seatVersionGenerator.next(1L)).thenReturn(5L);
-        when(eventSeatRepository.updateStatusIfCurrent(seats, 1L,
-                SeatStatus.AVAILABLE, SeatStatus.SOLD, 5L)).thenReturn(2); // affected == size
-        when(userRepository.findById(USER)).thenReturn(Optional.of(mock(cloudsoswift.podoR.domain.user.entity.User.class)));
 
-        service.confirmOrder(EVENT_ID, USER, seats, "MOCK");
+        service.finishConfirmed(EVENT_ID, USER, SERIES, seats);
 
-        verify(ticketingOrderRepository).save(any());
-        verify(paymentRepository).save(any());
         verify(seatHoldService).release(USER, SERIES, seats);
         verify(snapshotCache).evict(EVENT_ID);
         // 볼일이 끝났으니 자리를 즉시 비운다 — TTL 만큼 붙들고 있으면 순환이 느려진다
         verify(waitingQueue).leave(EVENT_ID, USER);
-    }
-
-    @Test
-    void confirmOrder_좌석이_이미판매되면_409_그리고_저장_evict_미발생() {
-        Event event = mockEvent();
-        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
-        List<Long> seats = List.of(1L);
-        when(seatHoldService.ownsAll(USER, seats)).thenReturn(true);
-        stubSeries(4);
-        when(ticketingItemRepository.countPaidSeatsInSeries(USER, SERIES)).thenReturn(0L);
-        EventSeat s1 = mockSeat(1L, event, SeatStatus.AVAILABLE, 10000);
-        when(eventSeatRepository.findAllById(seats)).thenReturn(List.of(s1));
-        when(seatVersionGenerator.next(1L)).thenReturn(5L);
-        when(eventSeatRepository.updateStatusIfCurrent(seats, 1L,
-                SeatStatus.AVAILABLE, SeatStatus.SOLD, 5L)).thenReturn(0); // affected != size
-
-        assertThatThrownBy(() -> service.confirmOrder(EVENT_ID, USER, seats, "MOCK"))
-                .isInstanceOf(ResponseStatusException.class);
-        verify(ticketingOrderRepository, never()).save(any());
-        verify(snapshotCache, never()).evict(anyString());
-        verify(waitingQueue, never()).leave(anyString(), anyLong()); // 실패했으면 자리를 유지한다
-    }
-
-    @Test
-    void confirmOrder_선점만료면_409() {
-        Event event = mockEvent();
-        when(eventRepository.findByEventIdAndDeletedDateIsNull(EVENT_ID)).thenReturn(Optional.of(event));
-        List<Long> seats = List.of(1L);
-        when(seatHoldService.ownsAll(USER, seats)).thenReturn(false);
-
-        assertThatThrownBy(() -> service.confirmOrder(EVENT_ID, USER, seats, "MOCK"))
-                .isInstanceOf(ResponseStatusException.class);
-        verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
     }
 
     // ---- 준비(prepare) ----

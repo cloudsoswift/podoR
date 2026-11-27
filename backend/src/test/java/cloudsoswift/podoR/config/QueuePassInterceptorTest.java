@@ -51,6 +51,7 @@ class QueuePassInterceptorTest {
     @MockitoBean SeatViewService seatViewService;
     @MockitoBean SeatViewRateLimiter rateLimiter;
     @MockitoBean TicketingOrderService ticketingOrderService;
+    @MockitoBean cloudsoswift.podoR.domain.ticketing.service.PaymentConfirmService paymentConfirmService;
 
     static final Authentication AUTH = new UsernamePasswordAuthenticationToken(
             100L, "t", List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -110,6 +111,21 @@ class QueuePassInterceptorTest {
         mvc.perform(delete("/events/EVT1/order/20260910-8C35D7AC").principal(AUTH))
                 .andExpect(status().isNoContent());
         verify(ticketingOrderService).cancelOrder(100L, "20260910-8C35D7AC");
+        verifyNoInteractions(waitingQueue);
+    }
+
+    @Test
+    void 결제_확정과_실패_기록은_게이트에서_제외되어_입장권_없이도_통과한다() throws Exception {
+        // 토스 결제창에 다녀오는 동안 입장권이 만료돼도 확정·실패 기록은 되어야 한다.
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"paymentKey\":\"pk\",\"amount\":1000}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/events/EVT1/order/ORD-1/fail").principal(AUTH)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"PAY_PROCESS_CANCELED\",\"message\":\"m\"}"))
+                .andExpect(status().isNoContent());
+        verify(paymentConfirmService).confirm("EVT1", 100L, "ORD-1", "pk", 1000L);
         verifyNoInteractions(waitingQueue);
     }
 }

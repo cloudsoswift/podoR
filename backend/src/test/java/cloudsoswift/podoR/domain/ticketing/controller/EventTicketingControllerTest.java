@@ -47,6 +47,7 @@ class EventTicketingControllerTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean TicketingOrderService service;
+    @MockitoBean cloudsoswift.podoR.domain.ticketing.service.PaymentConfirmService confirmService;
 
     static final Authentication AUTH = new UsernamePasswordAuthenticationToken(
             100L, "t", List.of(new SimpleGrantedAuthority("ROLE_USER")));
@@ -167,5 +168,66 @@ class EventTicketingControllerTest {
                         .content("{\"ticketingItemSeqs\":[11]}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("공연 시작 30분 전부터는 취소할 수 없습니다."));
+    }
+
+    @Test
+    void confirm_은_200() throws Exception {
+        when(confirmService.confirm("EVT1", 100L, "ORD-1", "pk-1", 30000L))
+                .thenReturn(new cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse("ORD-1"));
+
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentKey\":\"pk-1\",\"amount\":30000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderNumber").value("ORD-1"));
+        verify(confirmService).confirm("EVT1", 100L, "ORD-1", "pk-1", 30000L);
+    }
+
+    @Test
+    void confirm_에_paymentKey_나_amount_가_없으면_400() throws Exception {
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":30000}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentKey\":\"pk-1\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(confirmService);
+    }
+
+    @Test
+    void OrderConfirmFailedException_은_ProblemDetail_detail() throws Exception {
+        when(confirmService.confirm(anyString(), anyLong(), anyString(), anyString(), anyLong()))
+                .thenThrow(new cloudsoswift.podoR.domain.ticketing.payment.OrderConfirmFailedException(
+                        HttpStatus.BAD_REQUEST, "AMOUNT_MISMATCH", "결제 금액이 주문 금액과 다릅니다."));
+
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentKey\":\"pk-1\",\"amount\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("결제 금액이 주문 금액과 다릅니다."));
+    }
+
+    @Test
+    void PaymentGatewayException_은_502_와_토스_메시지() throws Exception {
+        when(confirmService.confirm(anyString(), anyLong(), anyString(), anyString(), anyLong()))
+                .thenThrow(new cloudsoswift.podoR.domain.ticketing.payment.PaymentGatewayException(
+                        "REJECT_CARD_PAYMENT", "한도초과"));
+
+        mvc.perform(post("/events/EVT1/order/ORD-1/confirm").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentKey\":\"pk-1\",\"amount\":30000}"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.detail").value("한도초과"));
+    }
+
+    @Test
+    void fail_은_204_와_코드_메시지_전달() throws Exception {
+        mvc.perform(post("/events/EVT1/order/ORD-1/fail").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"PAY_PROCESS_CANCELED\",\"message\":\"취소됨\"}"))
+                .andExpect(status().isNoContent());
+        verify(confirmService).fail("EVT1", 100L, "ORD-1", "PAY_PROCESS_CANCELED", "취소됨");
     }
 }
