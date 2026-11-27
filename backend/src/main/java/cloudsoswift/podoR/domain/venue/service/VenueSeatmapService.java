@@ -7,9 +7,12 @@ import cloudsoswift.podoR.domain.seat.entity.Seat;
 import cloudsoswift.podoR.domain.seat.repository.SeatRepository;
 import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
+import cloudsoswift.podoR.domain.ticketing.cancel.FailedRefund;
+import cloudsoswift.podoR.domain.ticketing.cancel.RefundFailedException;
 import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
+import cloudsoswift.podoR.domain.ticketing.payment.PaymentGatewayException;
 import cloudsoswift.podoR.domain.ticketing.repository.TicketingItemRepository;
 import cloudsoswift.podoR.domain.venue.dto.SeatmapCancelPreview;
 import cloudsoswift.podoR.domain.venue.dto.VenueSeatmapRequest;
@@ -19,7 +22,10 @@ import cloudsoswift.podoR.domain.venue.entity.Venue;
 import cloudsoswift.podoR.domain.venue.entity.VenueLayout;
 import cloudsoswift.podoR.domain.venue.repository.VenueLayoutRepository;
 import cloudsoswift.podoR.domain.venue.repository.VenueRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +45,10 @@ import java.util.Set;
  * - seats: 기존 좌석과 (section_key, row_number, seat_number) 로 diff 한다.
  *   같은 좌석은 행(seq)을 유지해 회차 좌석·예매 연결을 지킨다.
  *   사라지거나 사용 안 함이 된 좌석의 회차 좌석은 지우고, 그 좌석의 예매는 관리자 확인 후 부분 취소한다.
+ * - 예매 취소·환불은 주문마다 별도 트랜잭션이다. 하나라도 실패하면 좌석맵 저장 전체를 롤백하고
+ *   실패 목록({@link RefundFailedException})을 돌려준다. 다시 저장하면 실패했던 주문만 다시 시도된다.
  */
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -52,6 +61,9 @@ public class VenueSeatmapService {
     private final TicketingItemRepository ticketingItemRepository;
     private final SeatViewSnapshotCache seatViewSnapshotCache;
     private final CancellationService cancellationService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     /** 좌석 정체성. */
     record SeatLocation(String sectionKey, String rowNumber, Integer seatNumber) {
@@ -237,8 +249,32 @@ public class VenueSeatmapService {
             for (TicketingItem i : toCancel) {
                 byOrder.computeIfAbsent(i.getTicketingOrder(), k -> new ArrayList<>()).add(i);
             }
-            byOrder.forEach((order, list) ->
-                    cancellationService.cancel(order, list, CancelReason.VENUE_CHANGE, now));
+            // 주문마다 REQUIRES_NEW 로 "DB 취소 + PG 환불"을 커밋한다. 실패는 모아 두고 나머지 주문을 계속한다.
+            List<FailedRefund> failures = new ArrayList<>();
+            byOrder.forEach((order, list) -> {
+                try {
+                    cancellationService.cancelInNewTransaction(order.getSeq(),
+                            list.stream().map(TicketingItem::getSeq).toList(), CancelReason.VENUE_CHANGE, now);
+                } catch (PaymentGatewayException e) {
+                    log.warn("배치 변경 환불 실패 order={} code={} message={}",
+                            order.getOrderNumber(), e.code(), e.getMessage());
+                    failures.add(new FailedRefund(order.getOrderNumber(), order.getEvent().getEventId(),
+                            e.code(), e.getMessage()));
+                } catch (RuntimeException e) {
+                    log.warn("배치 변경 취소 실패 order={}", order.getOrderNumber(), e);
+                    failures.add(new FailedRefund(order.getOrderNumber(), order.getEvent().getEventId(),
+                            e.getClass().getSimpleName(), e.getMessage()));
+                }
+            });
+            // 좌석맵은 반쪽 반영하지 않는다. 성공한 주문은 이미 커밋돼 다음 저장에서 대상에서 빠진다.
+            if (!failures.isEmpty()) {
+                throw new RefundFailedException(failures);
+            }
+            // 이 영속성 컨텍스트의 주문·항목은 안쪽 트랜잭션 커밋 전 상태(PAID)다. 그대로 연결을 끊고 flush 하면
+            // 모든 컬럼을 덮어써 취소가 되돌아가므로, 커밋된 상태를 다시 읽는다.
+            // (READ COMMITTED 격리 수준 — Postgres 기본값 — 에 기대어 안쪽 커밋이 바깥 트랜잭션에 보인다.)
+            byOrder.keySet().forEach(entityManager::refresh);
+            toCancel.forEach(entityManager::refresh);
             items.forEach(TicketingItem::detachEventSeat);
             // 연결 끊기를 먼저 DB 에 내보내야 회차 좌석 벌크 삭제가 FK 에 걸리지 않는다.
             ticketingItemRepository.flush();

@@ -27,10 +27,13 @@ import cloudsoswift.podoR.domain.ticketing.repository.TicketingOrderRepository;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -50,6 +53,7 @@ import java.util.UUID;
  */
 @Service
 @Transactional(readOnly = true)
+@Slf4j
 @RequiredArgsConstructor
 public class TicketingOrderService {
 
@@ -245,21 +249,47 @@ public class TicketingOrderService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
 
-    /** 관객 취소: 취소(정책·결제는 CancellationService) 후 회차 좌석을 되돌리고 좌석맵 캐시를 비운다. */
+    /**
+     * 관객 취소: 정책·DB 취소 → 회차 좌석 되돌리기 → PG 환불(CancellationService) → 커밋 후 좌석맵 캐시 비우기.
+     * PG 환불이 커밋 전 마지막 실패 가능 단계다. 그 뒤에 Redis 오류 등으로 롤백되면 환불만 되고 표는 살아 있게 된다.
+     */
     private void cancel(TicketingOrder order, List<TicketingItem> targets) {
         LocalDateTime now = LocalDateTime.now();
-        cancellationService.cancel(order, targets, CancelReason.USER, now);
         // 공연장 배치 변경으로 회차 좌석이 지워진 항목은 되돌릴 좌석이 없다.
         List<Long> seatSeqs = targets.stream()
                 .filter(i -> i.getEventSeat() != null)
                 .map(i -> i.getEventSeat().getSeq())
                 .toList();
-        if (!seatSeqs.isEmpty()) {
-            long version = seatVersionGenerator.next(order.getEvent().getSeq());
-            eventSeatRepository.updateStatusIfCurrent(seatSeqs, order.getEvent().getSeq(),
-                    SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
+        cancellationService.cancel(order, targets, CancelReason.USER, now, () -> {
+            if (!seatSeqs.isEmpty()) {
+                long version = seatVersionGenerator.next(order.getEvent().getSeq());
+                eventSeatRepository.updateStatusIfCurrent(seatSeqs, order.getEvent().getSeq(),
+                        SeatStatus.SOLD, SeatStatus.AVAILABLE, version);
+            }
+        });
+        evictAfterCommit(order.getEvent().getEventId());
+    }
+
+    /** 취소는 이미 커밋(환불 포함)됐으므로 캐시 삭제 실패로 응답을 에러로 바꾸지 않는다. */
+    private void evictAfterCommit(String eventId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evictQuietly(eventId);
+            return;
         }
-        snapshotCache.evict(order.getEvent().getEventId());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictQuietly(eventId);
+            }
+        });
+    }
+
+    private void evictQuietly(String eventId) {
+        try {
+            snapshotCache.evict(eventId);
+        } catch (RuntimeException e) {
+            log.warn("취소 후 좌석맵 캐시 삭제 실패 eventId={}", eventId, e);
+        }
     }
 
     private void enforceLimit(Long userSeq, String seriesId, int requested, boolean includeHeld) {

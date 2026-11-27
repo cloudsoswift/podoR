@@ -4,9 +4,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-/** 항상 승인/취소에 성공하는 가짜 PG. 테스트 훅(failNext, onNextConfirm)과 호출 기록을 제공한다. */
+/** 항상 승인/취소에 성공하는 가짜 PG. 테스트 훅(failNext, failCancelFor, onNextConfirm)과 호출 기록을 제공한다. */
 @Component
 @ConditionalOnProperty(name = "payment.gateway", havingValue = "mock", matchIfMissing = true)
 public class MockPaymentGateway implements PaymentGateway {
@@ -23,6 +25,7 @@ public class MockPaymentGateway implements PaymentGateway {
     private String failCode;
     private String failMessage;
     private Runnable afterConfirm;
+    private final Map<String, PaymentGatewayException> cancelFailures = new HashMap<>();
 
     @Override
     public ConfirmResult confirm(String paymentKey, String orderId, long amount) {
@@ -43,6 +46,10 @@ public class MockPaymentGateway implements PaymentGateway {
     public void cancel(String paymentKey, long cancelAmount, String reason, String idempotencyKey) {
         synchronized (lock) {
             cancelCalls.add(new CancelCall(paymentKey, cancelAmount, reason, idempotencyKey));
+            PaymentGatewayException targeted = cancelFailures.remove(paymentKey);
+            if (targeted != null) {
+                throw targeted;
+            }
             throwIfFailArmed();
         }
     }
@@ -52,6 +59,13 @@ public class MockPaymentGateway implements PaymentGateway {
         synchronized (lock) {
             failCode = code;
             failMessage = message;
+        }
+    }
+
+    /** 이 paymentKey 의 다음 취소 1회를 실패시킨다(여러 주문 중 특정 주문만 실패시키는 시나리오용). */
+    public void failCancelFor(String paymentKey, String code, String message) {
+        synchronized (lock) {
+            cancelFailures.put(paymentKey, new PaymentGatewayException(code, message));
         }
     }
 
@@ -82,6 +96,7 @@ public class MockPaymentGateway implements PaymentGateway {
             failCode = null;
             failMessage = null;
             afterConfirm = null;
+            cancelFailures.clear();
         }
     }
 

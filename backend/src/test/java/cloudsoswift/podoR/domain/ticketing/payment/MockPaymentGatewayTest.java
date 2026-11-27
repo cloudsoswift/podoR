@@ -48,4 +48,14 @@ class MockPaymentGatewayTest {
         assertThat(gateway.cancelCalls()).isEmpty();
         assertThat(gateway.confirmCalls()).hasSize(1);
     }
+
+    @Test
+    void failCancelFor_는_그_paymentKey_의_다음_취소만_실패한다() {
+        gateway.failCancelFor("pk-2", "X", "boom");
+        gateway.cancel("pk-1", 10, "r", "k1");
+        assertThatThrownBy(() -> gateway.cancel("pk-2", 10, "r", "k2"))
+                .isInstanceOfSatisfying(PaymentGatewayException.class, e -> assertThat(e.code()).isEqualTo("X"));
+        gateway.cancel("pk-2", 10, "r", "k2");
+        assertThat(gateway.cancelCalls()).hasSize(3);
+    }
 }

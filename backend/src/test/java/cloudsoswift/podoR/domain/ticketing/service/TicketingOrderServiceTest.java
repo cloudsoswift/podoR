@@ -59,8 +59,10 @@ class TicketingOrderServiceTest {
     @Mock SeatVersionGenerator seatVersionGenerator;
     @Mock SeatViewSnapshotCache snapshotCache;
     @Mock WaitingQueueService waitingQueue;
+    cloudsoswift.podoR.domain.ticketing.payment.MockPaymentGateway gateway =
+            new cloudsoswift.podoR.domain.ticketing.payment.MockPaymentGateway();
     @Spy CancellationService cancellationService = new CancellationService(
-            new DefaultRefundPolicy(new RefundProperties(Duration.ofMinutes(30))));
+            new DefaultRefundPolicy(new RefundProperties(Duration.ofMinutes(30))), gateway);
 
     @Spy PaymentProperties paymentProperties = new PaymentProperties("mock", Duration.ofMinutes(15), null);
 
@@ -458,6 +460,66 @@ class TicketingOrderServiceTest {
         verify(eventSeatRepository).updateStatusIfCurrent(List.of(1L), 1L, SeatStatus.SOLD, SeatStatus.AVAILABLE, 7L);
         assertThat(order.getStatus()).isEqualTo("CANCELLED");
     }
+    /** 토스 결제(paymentKey 있음) 주문 하나: 좌석 1석 10000원. */
+    private TicketingOrder tossPaidOrder() {
+        Event event = mockEvent();
+        TicketingOrder order = paidOrder(event, paidItem(11L, mockSeat(1L, event, SeatStatus.SOLD, 10000), 10000));
+        Payment payment = Payment.builder().ticketingOrder(order).amount(10000L).method("카드").build();
+        payment.complete("pk-1", "카드", LocalDateTime.now());
+        ReflectionTestUtils.setField(order, "payment", payment);
+        return order;
+    }
+
+    @Test
+    void 환불_후_캐시_삭제는_커밋_뒤에_하고_실패해도_취소는_성공한다() {
+        TicketingOrder order = tossPaidOrder();
+        when(seatVersionGenerator.next(1L)).thenReturn(7L);
+        doThrow(new RuntimeException("redis down")).when(snapshotCache).evict(anyString());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.cancelItems(USER, "O1", List.of(11L));
+
+            // 커밋 전에는 캐시를 건드리지 않는다
+            verify(snapshotCache, never()).evict(anyString());
+            assertThat(gateway.cancelCalls()).hasSize(1);
+            // 커밋 후 콜백: 캐시 삭제가 실패해도 예외가 새지 않는다
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+        verify(snapshotCache).evict(EVENT_ID);
+        assertThat(order.getStatus()).isEqualTo("CANCELLED");
+        assertThat(order.getItems()).allSatisfy(i -> assertThat(i.isActive()).isFalse());
+    }
+
+    @Test
+    void 좌석_버전_발급이_실패하면_환불하지_않는다() {
+        tossPaidOrder();
+        when(seatVersionGenerator.next(1L)).thenThrow(new RuntimeException("redis down"));
+
+        assertThatThrownBy(() -> service.cancelItems(USER, "O1", List.of(11L)))
+                .hasMessage("redis down");
+
+        assertThat(gateway.cancelCalls()).isEmpty();
+        verify(eventSeatRepository, never()).updateStatusIfCurrent(anyList(), anyLong(), any(), any(), anyLong());
+    }
+
+    @Test
+    void 좌석_되돌리기는_PG_환불보다_먼저() {
+        tossPaidOrder();
+        when(seatVersionGenerator.next(1L)).thenAnswer(inv -> {
+            assertThat(gateway.cancelCalls()).isEmpty();
+            return 7L;
+        });
+
+        service.cancelItems(USER, "O1", List.of(11L));
+
+        verify(eventSeatRepository).updateStatusIfCurrent(List.of(1L), 1L, SeatStatus.SOLD, SeatStatus.AVAILABLE, 7L);
+        assertThat(gateway.cancelCalls()).singleElement()
+                .satisfies(c -> assertThat(c.cancelAmount()).isEqualTo(10000L));
+    }
+
     @Test
     void 마감_후_취소는_거절하고_아무것도_바꾸지_않는다() {
         Event event = mockEvent();

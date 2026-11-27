@@ -9,10 +9,9 @@ import cloudsoswift.podoR.domain.seatview.cache.SeatViewSnapshotCache;
 import cloudsoswift.podoR.domain.ticketing.cancel.CancellationService;
 import cloudsoswift.podoR.domain.ticketing.cancel.DefaultRefundPolicy;
 import cloudsoswift.podoR.domain.ticketing.cancel.RefundProperties;
-import cloudsoswift.podoR.domain.ticketing.entity.CancelReason;
 import cloudsoswift.podoR.domain.ticketing.entity.Payment;
-import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
+import cloudsoswift.podoR.domain.ticketing.payment.MockPaymentGateway;
 import cloudsoswift.podoR.domain.user.entity.User;
 import cloudsoswift.podoR.domain.venue.dto.SeatmapCancelPreview;
 import cloudsoswift.podoR.domain.venue.dto.VenueSeatmapRequest;
@@ -42,8 +41,9 @@ import static org.mockito.Mockito.verify;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({VenueSeatmapService.class, CancellationService.class, DefaultRefundPolicy.class})
+@Import({VenueSeatmapService.class, CancellationService.class, DefaultRefundPolicy.class, MockPaymentGateway.class})
 @EnableConfigurationProperties(RefundProperties.class)
+// 취소가 실제로 적용되는 케이스는 주문별 REQUIRES_NEW 가 커밋돼야 해서 VenueSeatmapRefundTest 에 있다.
 class VenueSeatmapServiceTest {
 
     @Autowired TestEntityManager em;
@@ -223,44 +223,6 @@ class VenueSeatmapServiceTest {
     }
 
     @Test
-    void 공연_임박_회차도_배치변경_취소() {
-        save(seat("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
-        Event e = eventAt("E1", LocalDateTime.now().plusMinutes(10));
-        TicketingOrder order = book(e, "O1", seatAt("A", 1));
-
-        save(1, off("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
-
-        TicketingOrder after = reload(order);
-        assertThat(after.getStatus()).isEqualTo("CANCELLED");
-        TicketingItem item = after.getItems().get(0);
-        assertThat(item.getCancelReason()).isEqualTo(CancelReason.VENUE_CHANGE);
-        assertThat(item.getRefundAmount()).isEqualTo(10000);
-        assertThat(after.getPayment().getStatus()).isEqualTo("CANCELLED");
-    }
-
-    @Test
-    void 확인수가_맞으면_그_좌석만_부분취소() {
-        save(seat("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
-        Event e = eventAt("E1", LocalDateTime.now().plusDays(10));
-        TicketingOrder order = book(e, "O1", seatAt("A", 1), seatAt("A", 2));
-
-        save(1, off("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
-
-        TicketingOrder after = reload(order);
-        assertThat(after.getStatus()).isEqualTo("PARTIALLY_CANCELLED");
-        assertThat(after.getTotalPrice()).isEqualTo(10000);
-        assertThat(after.getPayment().getCancelledAmount()).isEqualTo(10000L);
-        TicketingItem cancelled = after.getItems().stream().filter(i -> !i.isActive()).findFirst().orElseThrow();
-        assertThat(cancelled.getEventSeat()).isNull();
-        assertThat(cancelled.getRowNumber()).isEqualTo("A");
-        assertThat(cancelled.getSeatNumber()).isEqualTo(1);
-        assertThat(after.activeItems()).singleElement().satisfies(i -> assertThat(i.getEventSeat()).isNotNull());
-        assertThat(eventSeatCount()).isEqualTo(1);
-        assertThat(seatAt("A", 1).getIsAvailable()).isFalse();
-        verify(snapshotCache).evict("E1");
-    }
-
-    @Test
     void 확인수가_다르면_409() {
         save(seat("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
         Event e = eventAt("E1", LocalDateTime.now().plusDays(10));
@@ -273,20 +235,6 @@ class VenueSeatmapServiceTest {
                     assertThat(ex.getPreview().getCancelSeatCount()).isEqualTo(2);
                     assertThat(ex.getPreview().getCancelOrderCount()).isEqualTo(2);
                 });
-    }
-
-    @Test
-    void 제거된_좌석도_같은_규칙() {
-        save(seat("A구역", "k1", "A", 1), seat("A구역", "k1", "A", 2));
-        Event e = eventAt("E1", LocalDateTime.now().plusDays(10));
-        TicketingOrder order = book(e, "O1", seatAt("A", 1));
-
-        save(1, seat("A구역", "k1", "A", 2));
-
-        assertThat(reload(order).getStatus()).isEqualTo("CANCELLED");
-        assertThat(reload(order).getPayment().getStatus()).isEqualTo("CANCELLED");
-        assertThat(seqs()).containsOnlyKeys("A-2");
-        assertThat(eventSeatCount()).isZero();
     }
 
     @Test

@@ -171,6 +171,24 @@ class EventTicketingControllerTest {
     }
 
     @Test
+    void RefundFailedException_은_502_와_주문번호_목록() throws Exception {
+        doThrow(new cloudsoswift.podoR.domain.ticketing.cancel.RefundFailedException(List.of(
+                new cloudsoswift.podoR.domain.ticketing.cancel.FailedRefund("O1", "EVT1", "PROVIDER_ERROR", "오류"),
+                new cloudsoswift.podoR.domain.ticketing.cancel.FailedRefund("O2", "EVT1", "X", "m"))))
+                .when(service).cancelItems(anyLong(), anyString(), anyList());
+
+        mvc.perform(post("/events/EVT1/order/O1/cancel").principal(AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketingItemSeqs\":[11]}"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.detail").value("환불에 실패한 예매가 있습니다: O1, O2"))
+                .andExpect(jsonPath("$.failures[0].orderNumber").value("O1"))
+                .andExpect(jsonPath("$.failures[0].eventId").value("EVT1"))
+                .andExpect(jsonPath("$.failures[0].code").value("PROVIDER_ERROR"))
+                .andExpect(jsonPath("$.failures[1].message").value("m"));
+    }
+
+    @Test
     void confirm_은_200() throws Exception {
         when(confirmService.confirm("EVT1", 100L, "ORD-1", "pk-1", 30000L))
                 .thenReturn(new cloudsoswift.podoR.domain.ticketing.dto.OrderCreatedResponse("ORD-1"));
