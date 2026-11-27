@@ -12,6 +12,7 @@
     "both": "concurrently \"cd ../backend && gradlew bootRun\" \"next dev\""
   },
   "dependencies": {
+    "@tosspayments/tosspayments-sdk": "^2.10.0",
     "axios": "^1.16.1",
     "hls.js": "^1.7.4",
     "next": "^16.2.4",

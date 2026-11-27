@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { isAxiosError } from "axios";
 import { enterQueue, leaveQueue, leaveQueueKeepalive, QueueStatus, QueueStatusResponse } from "@/lib/api/queue";
 import { QUEUE_PASS_LOST_EVENT, QueuePassLostDetail } from "@/lib/queuePassLost";
+import { isPaymentRedirect } from "@/lib/paymentRedirect";
 import { formatDateTime } from "@/lib/format";
 import { Countdown, PassTimer } from "./QueueTimers";
 
@@ -115,6 +116,7 @@ export default function QueueGate({ eventId, children, pollMs = 2500, retryMs = 
   //   effect 를 다시 실행하는데, 재실행이 같은 회차의 예약을 취소하므로 마운트 직후 반납되지 않는다.
   //   (결제 페이지의 선점 해제와 같은 패턴)
   // - 탭 닫기·새로고침(pagehide): 둘을 구분할 수 없으므로 둘 다 반납한다 — 새로고침하면 순번이 뒤로 밀린다(확정 정책).
+  // - 토스 결제창으로 이동 중(isPaymentRedirect)이면 둘 다 건너뛴다. 입장권 정리는 서버가 맡는다(확정 시 leave, 아니면 TTL).
   const pendingRelease = useRef<{ eventId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   useEffect(() => {
     // 같은 회차의 반납 예약만 취소한다. 다른 회차로 바뀐 경우엔 이전 회차를 그대로 반납해야 한다.
@@ -123,7 +125,9 @@ export default function QueueGate({ eventId, children, pollMs = 2500, retryMs = 
       pendingRelease.current = null;
     }
 
-    const onPageHide = () => leaveQueueKeepalive(eventId);
+    const onPageHide = () => {
+      if (!isPaymentRedirect(eventId)) leaveQueueKeepalive(eventId);
+    };
     window.addEventListener("pagehide", onPageHide);
 
     return () => {
@@ -131,6 +135,7 @@ export default function QueueGate({ eventId, children, pollMs = 2500, retryMs = 
       pendingRelease.current = {
         eventId,
         timer: setTimeout(() => {
+          if (isPaymentRedirect(eventId)) return;
           leaveQueue(eventId).catch(() => {});
         }, releaseDelayMs),
       };

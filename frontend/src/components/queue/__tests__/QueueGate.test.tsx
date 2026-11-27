@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { AxiosError, AxiosHeaders } from "axios";
 import { enterQueue, leaveQueue, leaveQueueKeepalive, QueueStatusResponse } from "@/lib/api/queue";
 import { notifyQueuePassLost } from "@/lib/queuePassLost";
+import { markPaymentRedirect } from "@/lib/paymentRedirect";
 import QueueGate from "../QueueGate";
 
 jest.mock("@/lib/api/queue", () => ({
@@ -73,6 +74,7 @@ beforeEach(() => {
   mockedLeave.mockReset().mockResolvedValue(undefined);
   mockedKeepalive.mockReset();
   mockPush.mockReset();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -295,5 +297,19 @@ describe("반납", () => {
     window.dispatchEvent(new Event("pagehide"));
 
     expect(mockedKeepalive).toHaveBeenCalledWith("E1");
+  });
+
+  test("결제이동_플래그가_있으면_pagehide_에_반납하지_않는다", async () => {
+    mockedEnter.mockResolvedValue(admitted());
+    const { unmount } = renderGate();
+    await flush();
+
+    markPaymentRedirect("E1"); // 토스 결제창으로 이동 직전
+    window.dispatchEvent(new Event("pagehide"));
+    unmount();
+    await advance(1000);
+
+    expect(mockedKeepalive).not.toHaveBeenCalled();
+    expect(mockedLeave).not.toHaveBeenCalled();
   });
 });

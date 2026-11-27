@@ -184,6 +184,29 @@ export const handlers = [
     return HttpResponse.json({ used: 0, max: 4 });
   }),
 
+  // 결제 - 준비(PENDING 주문 생성). 금액은 서버가 계산한다 — 여기선 좌석당 10,000원.
+  http.post(`${BASE_URL}/events/:eventId/order`, async ({ request }) => {
+    const { eventSeatSeqs = [] } = (await request.json()) as { eventSeatSeqs?: number[] };
+    return HttpResponse.json(
+      {
+        orderNumber: "20260101-MOCK0001",
+        amount: eventSeatSeqs.length * 10000,
+        orderName: `모의 공연 ${eventSeatSeqs.length}석`,
+      },
+      { status: 201 },
+    );
+  }),
+
+  // 결제 - 승인
+  http.post(`${BASE_URL}/events/:eventId/order/:orderNumber/confirm`, ({ params }) => {
+    return HttpResponse.json({ orderNumber: params.orderNumber });
+  }),
+
+  // 결제 - 실패 기록
+  http.post(`${BASE_URL}/events/:eventId/order/:orderNumber/fail`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // 공연장의 이벤트 목록 (최신순)
   http.get(`${BASE_URL}/venues/:venueId/events`, ({ params }) => {
     const events = mockEvents
