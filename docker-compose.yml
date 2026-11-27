@@ -68,6 +68,9 @@ services:
       # 스트리밍 비밀값(.env). relaxed binding: STREAM_INTERNALTOKEN -> stream.internal-token
       STREAM_INTERNALTOKEN: ${STREAM_INTERNAL_TOKEN}
       STREAM_MEDIACOOKIESECRET: ${STREAM_MEDIA_COOKIE_SECRET}
+      # 결제 게이트웨이: mock(기본) | toss. toss 인데 시크릿 키가 비면 기동 거부. relaxed binding: payment.gateway / payment.toss.secret-key
+      PAYMENT_GATEWAY: ${PAYMENT_GATEWAY:-mock}
+      PAYMENT_TOSS_SECRET_KEY: ${TOSS_SECRET_KEY:-}
     volumes:
       # VOD 변환(ffmpeg)이 HLS 조각을 읽고 /media/vod 에 mp4 를 쓴다.
       - media_data:/media
@@ -114,6 +117,8 @@ services:
       args:
         # 브라우저가 백엔드를 호출할 주소. next build 에 박힌다.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # 토스페이먼츠 클라이언트 키(test_gck_…). 비우면 FE 모의 결제. BE PAYMENT_GATEWAY=toss 와 짝으로 설정.
+        NEXT_PUBLIC_TOSS_CLIENT_KEY: ${NEXT_PUBLIC_TOSS_CLIENT_KEY:-}
     container_name: home-next
     restart: unless-stopped
     environment:

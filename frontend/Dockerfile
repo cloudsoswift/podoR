@@ -8,6 +8,8 @@ COPY . .
 # NEXT_PUBLIC_* 는 빌드 시점에 브라우저 번들에 박힌다. compose 가 build arg 로 넘긴다.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_TOSS_CLIENT_KEY
+ENV NEXT_PUBLIC_TOSS_CLIENT_KEY=$NEXT_PUBLIC_TOSS_CLIENT_KEY
 RUN npm run build
 
 # ── run stage ────────────────────────────────────────────────────────
