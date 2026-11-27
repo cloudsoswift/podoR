@@ -1,5 +1,6 @@
 package cloudsoswift.podoR.domain.ticketing.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -33,4 +34,10 @@ public interface TicketingItemRepository extends JpaRepository<TicketingItem, Lo
            "JOIN FETCH ti.ticketingOrder o JOIN FETCH o.event LEFT JOIN FETCH o.payment " +
            "WHERE ti.eventSeat.seq IN :eventSeatSeqs")
     List<TicketingItem> findAllByEventSeatSeqIn(@Param("eventSeatSeqs") Collection<Long> eventSeatSeqs);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE TicketingItem ti SET ti.status = :to WHERE ti.status = :from AND ti.ticketingOrder.seq IN " +
+           "(SELECT o.seq FROM TicketingOrder o WHERE o.seq IN :orderSeqs AND o.status = :orderStatus)")
+    int markStatusByOrderSeqs(@Param("orderSeqs") Collection<Long> orderSeqs, @Param("orderStatus") String orderStatus,
+                              @Param("from") String from, @Param("to") String to);
 }

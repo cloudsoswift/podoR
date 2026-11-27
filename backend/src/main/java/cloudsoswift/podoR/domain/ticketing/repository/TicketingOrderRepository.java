@@ -1,5 +1,7 @@
 package cloudsoswift.podoR.domain.ticketing.repository;
 
+import java.util.Collection;
+import org.springframework.data.jpa.repository.Modifying;
 import cloudsoswift.podoR.domain.ticketing.entity.TicketingOrder;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -46,4 +48,14 @@ public interface TicketingOrderRepository extends JpaRepository<TicketingOrder, 
             "LEFT JOIN FETCH o.items i LEFT JOIN FETCH i.eventSeat es LEFT JOIN FETCH es.seat " +
             "WHERE o.orderNumber = :orderNumber")
     Optional<TicketingOrder> findDetailByOrderNumber(@Param("orderNumber") String orderNumber);
+
+    // 방치 만료 대상 - 컷오프보다 오래된 PENDING 주문 seq
+    @Query("SELECT o.seq FROM TicketingOrder o WHERE o.status = :status AND o.orderedAt < :cutoff")
+    List<Long> findStaleSeqs(@Param("status") String status, @Param("cutoff") LocalDateTime cutoff);
+
+    // 벌크 UPDATE 는 @Version 을 우회하므로 직접 올려, 같은 주문을 쥔 확정 트랜잭션의 낙관적 락이 실패하게 한다.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE TicketingOrder o SET o.status = :to, o.version = o.version + 1 " +
+            "WHERE o.seq IN :seqs AND o.status = :from")
+    int markExpired(@Param("seqs") Collection<Long> seqs, @Param("from") String from, @Param("to") String to);
 }
